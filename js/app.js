@@ -16,16 +16,11 @@
     if (!f) return '';
     const d = new Date(f + 'T12:00:00');
     const h = Datos.hoy();
-    const man = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+    const man = Datos.sumarDias(h, 1);
     if (f === h) return 'Hoy';
     if (f === man) return 'Mañana';
     return DIAS[d.getDay()].replace(/^./, (c) => c.toUpperCase()) + ' ' + fechaCorta(f);
   }
-  const sumarDias = (f, n) => {
-    const d = new Date((f || Datos.hoy()) + 'T12:00:00');
-    d.setDate(d.getDate() + n);
-    return d.toISOString().slice(0, 10);
-  };
   const ESTADOS = {
     completada: ['Completada', 'ok'],
     'en-curso': ['A medias', 'medio'],
@@ -46,12 +41,23 @@
       el('div.medidor-relleno.tono-' + colorPct(pct), { style: `width:${pct || 0}%` })
     );
   }
+  /** Texto de una serie (pautada o realizada): «10 reps · 60 kg», «30 s», «5 km · Z2». */
+  const textoSerie = (it, x) => {
+    if (!x) return '—';
+    if (it.tipo === 'km') return `${x.km != null && x.km !== '' ? Graficas.fmt(+x.km, 2) : '—'} km${x.zona ? ' · ' + x.zona : ''}`;
+    const u = it.tipo === 'seg' ? ' s' : ' reps';
+    return `${x.reps != null && x.reps !== '' ? x.reps : '—'}${u}${x.kg != null && x.kg !== '' ? ' · ' + x.kg + ' kg' : ''}`;
+  };
   const textoObjetivo = (it) => {
     const series = it.series || [];
-    const unidad = it.tipo === 'seg' ? ' s' : '';
-    const iguales = series.every((s) => s.reps === series[0].reps && s.kg === series[0].kg);
-    const uno = (s) => `${s.reps || '—'}${unidad}${s.kg ? ' · ' + s.kg + ' kg' : ''}`;
     if (!series.length) return '';
+    if (it.tipo === 'km') {
+      const total = series.reduce((t, x) => t + (Datos.num(x.km) || 0), 0);
+      return series.length === 1 ? textoSerie(it, series[0]) : `${Graficas.fmt(total, 2)} km en ${series.length} tramos (${series.map((x) => x.zona || '—').join(', ')})`;
+    }
+    const unidad = it.tipo === 'seg' ? ' s' : '';
+    const iguales = series.every((x) => x.reps === series[0].reps && x.kg === series[0].kg);
+    const uno = (x) => `${x.reps || '—'}${unidad}${x.kg ? ' · ' + x.kg + ' kg' : ''}`;
     return iguales ? `${series.length} × ${uno(series[0])}` : series.map(uno).join(' / ');
   };
   const sugerirPassword = () => {
@@ -343,17 +349,22 @@
     window.scrollTo(0, 0);
     try {
       if (S.sesion.rol === 'entrenador') {
-        const [vista, id, sub, sid] = partes;
-        if (vista === 'atleta' && id && sub === 'sesion' && sid) return await vistaRevision(id, sid);
-        if (vista === 'atleta' && id && sub === 'editar') return await vistaEditor(id, sid);
-        if (vista === 'atleta' && id) return await vistaAtletaEntrenador(id);
-        if (vista === 'nueva') return await vistaEditor(null, null);
+        const [vista, id, sub, x, y] = partes;
+        if (vista === 'atleta' && id) {
+          if (sub === 'sesion' && x && y === 'editar') return await vistaEditor(id, 'instancia', x);
+          if (sub === 'sesion' && x) return await vistaRevision(id, x);
+          if (sub === 'disenar') return await vistaEditor(id, 'plantilla', x || 'nueva');
+          if (sub === 'plan' || sub === 'evolucion' || sub === 'sesiones') return await vistaFicha(id, sub, x);
+          return ir(`#/atleta/${id}/sesiones`);
+        }
         if (vista === 'ejercicios') return vistaEjercicios();
         if (vista === 'ajustes') return vistaAjustes();
         return await vistaInicioEntrenador();
       }
-      const [vista, sid] = partes;
-      if (vista === 's' && sid) return vistaSesionAtleta(sid);
+      const [vista, x] = partes;
+      if (vista === 's' && x) return vistaSesionAtleta(x);
+      if (vista === 'calendario') return await vistaCalendarioAtleta(x);
+      if (vista === 'evolucion') return await vistaEvolucionAtleta();
       if (vista === 'cuenta') return vistaCuentaAtleta();
       return await vistaInicioAtleta();
     } catch (e) {
@@ -363,18 +374,22 @@
   }
   window.addEventListener('hashchange', () => S.sesion && render());
 
-  function pestanasEntrenador(activa) {
-    const p = [
-      ['#/', 'Atletas'],
-      ['#/ejercicios', 'Ejercicios'],
-      ['#/ajustes', 'Ajustes'],
-    ];
+  function pestanas(lista, activa, etiqueta) {
     return el(
       'nav.pestanas',
-      { 'aria-label': 'Secciones' },
-      p.map(([h, t]) => el('a.pestana', { href: h, 'aria-current': h === activa ? 'page' : null }, t))
+      { 'aria-label': etiqueta || 'Secciones' },
+      lista.map(([h, t, clave]) => el('a.pestana', { href: h, 'aria-current': clave === activa ? 'page' : null }, t))
     );
   }
+  const pestanasEntrenador = (activa) =>
+    pestanas(
+      [
+        ['#/', 'Atletas', 'atletas'],
+        ['#/ejercicios', 'Ejercicios', 'ejercicios'],
+        ['#/ajustes', 'Ajustes', 'ajustes'],
+      ],
+      activa
+    );
 
   /* ================= ENTRENADOR ================= */
   async function datosAtleta(a, forzar) {
@@ -392,32 +407,25 @@
     const h = Datos.hoy();
     const tarjetas = atletas.map((a, i) => {
       const d = datos[i];
-      if (!d) return el('a.tarjeta-atleta', { href: '#/atleta/' + a.id }, el('b', a.nombre), el('span.ayuda', 'No se han podido leer sus datos'));
+      const iniciales = a.nombre.split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
+      if (!d) return el('a.tarjeta-atleta', { href: `#/atleta/${a.id}/sesiones` }, el('b', a.nombre), el('span.ayuda', 'No se han podido leer sus datos'));
       const c = Datos.cumplimientoPeriodo(d);
       const prox = (d.sesiones || []).filter((s) => s.fecha >= h && !(d.registros[s.id] && d.registros[s.id].completada)).sort((x, y) => x.fecha.localeCompare(y.fecha))[0];
       const ult = Object.values(d.registros || {}).map((r) => r.actualizado).filter(Boolean).sort().pop();
       return el(
         'a.tarjeta-atleta',
-        { href: '#/atleta/' + a.id },
-        el('div.fila-sep', el('b', a.nombre), el('span.pct.tono-' + colorPct(c.pct), c.pct == null ? '—' : c.pct + '%')),
+        { href: `#/atleta/${a.id}/sesiones` },
+        el('div.atleta-cab', el('span.avatar', { 'aria-hidden': 'true' }, iniciales), el('b', a.nombre), el('span.pct.tono-' + colorPct(c.pct), c.pct == null ? '—' : c.pct + '%')),
         barra(c.pct, 'Cumplimiento de ' + a.nombre),
         el('span.ayuda', c.sesiones ? `Cumplimiento últimas 4 semanas (${c.sesiones} sesiones)` : 'Sin sesiones vencidas en las últimas 4 semanas'),
-        el('span.meta', prox ? `Próxima: ${fechaBonita(prox.fecha)} · ${prox.titulo || 'Sesión'}` : 'Sin sesiones pendientes'),
+        el('span.meta', prox ? `Próxima: ${fechaBonita(prox.fecha)} · ${prox.titulo || 'Sesión'}` : 'Sin sesiones programadas'),
         el('span.meta', ult ? 'Último registro: ' + new Date(ult).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : 'Aún no ha registrado nada')
       );
     });
     app.replaceChildren(
-      pestanasEntrenador('#/'),
+      pestanasEntrenador('atletas'),
       avisoModo() || '',
-      el(
-        'div.cabecera',
-        el('h1', 'Atletas'),
-        el(
-          'div.fila-botones',
-          atletas.length > 0 && el('a.btn.btn-primario', { href: '#/nueva' }, '+ Nueva sesión'),
-          el('button.btn', { type: 'button', onclick: nuevoAtleta }, '+ Añadir atleta')
-        )
-      ),
+      el('div.cabecera', el('h1', 'Atletas'), el('button.btn.btn-primario', { type: 'button', onclick: nuevoAtleta }, '+ Añadir atleta')),
       atletas.length
         ? el('div.lista-atletas', tarjetas)
         : el('div.tarjeta.vacio', el('p', 'Aún no tienes atletas.'), el('button.btn.btn-primario', { type: 'button', onclick: nuevoAtleta }, '+ Añadir el primero'))
@@ -460,7 +468,7 @@
       cargando('Creando atleta…');
       const a = await Datos.crearAtleta(S.sesion, { nombre: nombre.value.trim(), usuario: usuario.value, password: pass.value });
       await mostrarCredenciales(a.nombre, a.usuario, pass.value);
-      ir('#/atleta/' + a.id);
+      ir(`#/atleta/${a.id}/sesiones`);
     } catch (e) {
       aviso(errorTexto(e), 'error', 6000);
       render();
@@ -490,55 +498,18 @@
     });
   }
 
-  async function vistaAtletaEntrenador(id) {
-    const a = atletaPorId(id);
-    if (!a) return ir('#/');
-    cargando();
-    const d = await datosAtleta(a, true);
-    if (!d) throw new Error('No se han podido leer los datos de ' + a.nombre);
-    const h = Datos.hoy();
-    const sesiones = (d.sesiones || []).slice().sort((x, y) => y.fecha.localeCompare(x.fecha));
-    const proximas = sesiones.filter((s) => s.fecha >= h).reverse();
-    const pasadas = sesiones.filter((s) => s.fecha < h);
-    const c = Datos.cumplimientoPeriodo(d);
-    const fila = (s) => {
-      const reg = d.registros[s.id];
-      const cs = Datos.cumplimientoSesion(s, reg);
-      return el(
-        'a.fila-sesion',
-        { href: `#/atleta/${id}/sesion/${s.id}` },
-        el('div', el('b', s.titulo || 'Sesión'), el('span.meta', `${fechaBonita(s.fecha)} · ${s.items.length} ejercicios`)),
-        el('div.fila-sesion-der', chipEstado(cs), cs.pct != null && cs.estado !== 'pendiente' ? barra(cs.pct) : null)
-      );
-    };
-    app.replaceChildren(
-      pestanasEntrenador('#/'),
-      el('a.volver', { href: '#/' }, '← Atletas'),
-      el(
-        'div.cabecera',
-        el('div', el('h1', a.nombre), el('span.ayuda-blanca', 'Usuario: ' + a.usuario)),
-        el('div.fila-botones', el('a.btn.btn-primario', { href: `#/atleta/${id}/editar` }, '+ Nueva sesión'))
-      ),
-      el(
-        'div.tarjeta.resumen',
-        el('div.fila-sep', el('b', 'Cumplimiento últimas 4 semanas'), el('span.pct.tono-' + colorPct(c.pct), c.pct == null ? '—' : c.pct + '%')),
-        barra(c.pct),
-        el('p.ayuda', 'Media de las sesiones ya vencidas: se compara lo que ha hecho (repeticiones y kilos) con lo que pautaste.')
-      ),
-      el('h2.titulo-seccion', 'Próximas'),
-      proximas.length ? el('div.lista', proximas.map(fila)) : el('p.vacio-blanco', 'No hay sesiones programadas.'),
-      el('h2.titulo-seccion', 'Anteriores'),
-      pasadas.length ? el('div.lista', pasadas.map(fila)) : el('p.vacio-blanco', 'Todavía no hay sesiones anteriores.'),
-      el(
-        'div.tarjeta.zona-gestion',
-        el('h3', 'Cuenta del atleta'),
-        el(
-          'div.fila-botones',
-          el('button.btn', { type: 'button', onclick: () => nuevaPasswordAtleta(a) }, 'Nueva contraseña'),
-          el('button.btn.btn-peligro', { type: 'button', onclick: () => borrarAtleta(a) }, 'Eliminar atleta')
-        )
-      )
-    );
+  async function menuCuentaAtleta(a) {
+    const r = await dialogo({
+      titulo: 'Cuenta de ' + a.nombre,
+      cuerpo: el('p', 'Usuario: ' + a.usuario),
+      botones: [
+        { texto: 'Eliminar atleta', valor: 'borrar', peligro: true },
+        { texto: 'Nueva contraseña', valor: 'pass' },
+        { texto: 'Cerrar', valor: null, primario: true },
+      ],
+    });
+    if (r === 'pass') nuevaPasswordAtleta(a);
+    if (r === 'borrar') borrarAtleta(a);
   }
 
   async function nuevaPasswordAtleta(a) {
@@ -561,7 +532,7 @@
   }
 
   async function borrarAtleta(a) {
-    if (!(await confirmar('Eliminar atleta', `Se borrarán la planificación y los registros de ${a.nombre}. No se puede deshacer.`, 'Eliminar', true))) return;
+    if (!(await confirmar('Eliminar atleta', `Se borrarán las sesiones, la planificación, los registros y las mediciones de ${a.nombre}. No se puede deshacer.`, 'Eliminar', true))) return;
     try {
       cargando('Eliminando…');
       await Datos.eliminarAtleta(S.sesion, a);
@@ -574,44 +545,340 @@
     }
   }
 
-  /* ---------- Revisión de una sesión (entrenador) ---------- */
+  /* ---------- Ficha del atleta: Sesiones · Planificación · Evolución ---------- */
+  async function vistaFicha(id, pestana, arg) {
+    const a = atletaPorId(id);
+    if (!a) return ir('#/');
+    cargando();
+    const d = await datosAtleta(a, true);
+    if (!d) throw new Error('No se han podido leer los datos de ' + a.nombre);
+    d.plantillas = d.plantillas || [];
+    const c = Datos.cumplimientoPeriodo(d);
+    const contenido = el('div.ficha-contenido');
+    app.replaceChildren(
+      el('a.volver', { href: '#/' }, '← Atletas'),
+      el(
+        'div.cabecera.cabecera-ficha',
+        el('div', el('h1', a.nombre), el('span.ayuda-blanca', c.pct == null ? 'Sin sesiones vencidas en las últimas 4 semanas' : `Cumplimiento últimas 4 semanas: ${c.pct}%`)),
+        el('button.btn.btn-peq.btn-claro', { type: 'button', onclick: () => menuCuentaAtleta(a) }, 'Cuenta')
+      ),
+      pestanas(
+        [
+          [`#/atleta/${id}/sesiones`, 'Sesiones', 'sesiones'],
+          [`#/atleta/${id}/plan`, 'Planificación', 'plan'],
+          [`#/atleta/${id}/evolucion`, 'Evolución', 'evolucion'],
+        ],
+        pestana,
+        'Ficha de ' + a.nombre
+      ),
+      contenido
+    );
+    if (pestana === 'sesiones') pintarSesionesDisenadas(contenido, a, d);
+    else if (pestana === 'plan') pintarPlanificacion(contenido, a, d, arg);
+    else
+      pintarEvolucion(contenido, d, {
+        guardar: async (mid, medida) => {
+          S.atletas[a.id] = await Datos.guardarMedida(a.ruta, Cripto.unb64(a.dek), mid, medida);
+          return S.atletas[a.id];
+        },
+      });
+  }
+
+  /* --- Pestaña Sesiones: las sesiones diseñadas (sin fecha) --- */
+  function pintarSesionesDisenadas(contenido, a, d) {
+    const h = Datos.hoy();
+    const lista = d.plantillas.slice().sort((x, y) => (x.titulo || '').localeCompare(y.titulo || '', 'es'));
+    const tarjeta = (p) => {
+      const usos = d.sesiones.filter((s) => s.plantilla === p.id);
+      const prox = usos.filter((s) => s.fecha >= h).sort((x, y) => x.fecha.localeCompare(y.fecha))[0];
+      return el(
+        'div.tarjeta.plantilla',
+        el('div.fila-sep', el('h2', p.titulo || 'Sesión sin título'), el('span.chip.chip-gris', `${p.items.length} ejercicios`)),
+        p.notas && el('p.meta', p.notas),
+        el(
+          'ul.lista-ej',
+          p.items.map((it) => {
+            const def = defItem(it);
+            return el('li', el('span.mini', Figuras.ilustracion(def, { compacto: true, estatico: true })), el('span', el('b', def.nombre), el('small', textoObjetivo(it))));
+          })
+        ),
+        el('p.meta', usos.length ? `Programada ${usos.length} ${usos.length === 1 ? 'vez' : 'veces'}` + (prox ? ` · próxima: ${fechaBonita(prox.fecha)}` : '') : 'Aún no está programada'),
+        el(
+          'div.fila-botones',
+          el('button.btn.btn-primario.btn-peq', { type: 'button', onclick: () => dialogoProgramar(a, d, [p.id], Datos.hoy()) }, 'Programar'),
+          el('a.btn.btn-peq', { href: `#/atleta/${a.id}/disenar/${p.id}` }, 'Editar'),
+          el('button.btn.btn-peq', { type: 'button', onclick: () => duplicarPlantilla(a, p) }, 'Duplicar'),
+          S.sesion.datos.atletas.length > 1 && el('button.btn.btn-peq', { type: 'button', onclick: () => copiarPlantillaA(a, p) }, 'Copiar a otro atleta'),
+          el('button.btn.btn-peq.btn-peligro', { type: 'button', onclick: () => borrarPlantilla(a, p, usos) }, 'Eliminar')
+        )
+      );
+    };
+    contenido.replaceChildren(
+      el(
+        'div.cabecera',
+        el('p.ayuda-blanca', 'Diseña aquí las sesiones de este atleta. Después, en Planificación, colócalas en los días del calendario.'),
+        el('a.btn.btn-primario', { href: `#/atleta/${a.id}/disenar/nueva` }, '+ Diseñar sesión')
+      ),
+      lista.length
+        ? el('div.lista-plantillas', lista.map(tarjeta))
+        : el('div.tarjeta.vacio', el('p', 'Todavía no hay sesiones diseñadas para este atleta.'), el('a.btn.btn-primario', { href: `#/atleta/${a.id}/disenar/nueva` }, '+ Diseñar la primera'))
+    );
+  }
+
+  function duplicarPlantilla(a, p) {
+    S.borrador = { ...JSON.parse(JSON.stringify(p)), id: null, titulo: (p.titulo || 'Sesión') + ' (copia)' };
+    ir(`#/atleta/${a.id}/disenar/copia`);
+  }
+
+  async function copiarPlantillaA(a, p) {
+    const otros = S.sesion.datos.atletas.filter((x) => x.id !== a.id);
+    const marcados = new Set();
+    const ok = await dialogo({
+      titulo: 'Copiar «' + (p.titulo || 'Sesión') + '»',
+      cuerpo: [
+        el('p', 'Se añadirá a las sesiones diseñadas de:'),
+        el('div.chips', otros.map((x) => el('label.chip-check', el('input', { type: 'checkbox', onchange: (e) => (e.target.checked ? marcados.add(x.id) : marcados.delete(x.id)) }), x.nombre))),
+      ],
+      botones: [
+        { texto: 'Cancelar', valor: false },
+        { texto: 'Copiar', valor: true, primario: true },
+      ],
+    });
+    if (!ok || !marcados.size) return;
+    try {
+      for (const idA of marcados) {
+        await Datos.modificarAtleta(atletaPorId(idA), (d) => {
+          d.plantillas = d.plantillas || [];
+          d.plantillas.push({ ...JSON.parse(JSON.stringify(p)), id: uid() });
+        });
+      }
+      aviso(`Copiada a ${marcados.size} atleta${marcados.size > 1 ? 's' : ''}`);
+    } catch (e) {
+      aviso(errorTexto(e), 'error');
+    }
+  }
+
+  async function borrarPlantilla(a, p, usos) {
+    const pendientes = usos.filter((s) => !tieneRegistro(S.atletas[a.id], s.id) && s.fecha >= Datos.hoy());
+    const r = await dialogo({
+      titulo: 'Eliminar «' + (p.titulo || 'Sesión') + '»',
+      cuerpo: el('p', pendientes.length ? `Está programada en ${pendientes.length} día(s) futuros sin registrar. ¿Quitarla también del calendario?` : 'Las sesiones ya hechas se conservan en el calendario.'),
+      botones: [
+        { texto: 'Cancelar', valor: null },
+        ...(pendientes.length ? [{ texto: 'Eliminar y quitar del calendario', valor: 'todo', peligro: true }] : []),
+        { texto: pendientes.length ? 'Solo eliminar el diseño' : 'Eliminar', valor: 'solo', peligro: !pendientes.length, primario: !!pendientes.length },
+      ],
+    });
+    if (!r) return;
+    try {
+      const quitar = new Set(r === 'todo' ? pendientes.map((s) => s.id) : []);
+      await Datos.modificarAtleta(a, (d) => {
+        d.plantillas = (d.plantillas || []).filter((x) => x.id !== p.id);
+        d.sesiones = d.sesiones.filter((s) => !quitar.has(s.id));
+      });
+      aviso('Sesión eliminada');
+      render();
+    } catch (e) {
+      aviso(errorTexto(e), 'error');
+    }
+  }
+
+  const tieneRegistro = (d, sid) => {
+    const r = d && d.registros && d.registros[sid];
+    return !!(r && (r.completada || Object.values(r.items || {}).some((x) => (x.series || []).some((s) => s && (s.reps != null || s.kg != null || s.km != null || s.hecho)))));
+  };
+
+  /** Coloca una o varias sesiones diseñadas en una fecha (y opcionalmente las repite cada semana). */
+  async function programar(a, ids, fecha, semanas) {
+    let n = 0;
+    await Datos.modificarAtleta(a, (d) => {
+      for (let w = 0; w < semanas; w++) {
+        const f = Datos.sumarDias(fecha, 7 * w);
+        ids.forEach((pid) => {
+          const p = (d.plantillas || []).find((x) => x.id === pid);
+          if (!p) return;
+          d.sesiones.push({ id: uid(), plantilla: p.id, fecha: f, titulo: p.titulo, notas: p.notas, items: JSON.parse(JSON.stringify(p.items)) });
+          n++;
+        });
+      }
+    });
+    return n;
+  }
+
+  function selectorRepetir() {
+    return el(
+      'select',
+      Array.from({ length: 12 }, (_, i) => el('option', { value: i + 1 }, i === 0 ? 'Solo este día' : `Repetir ${i + 1} semanas (mismo día)`))
+    );
+  }
+
+  async function dialogoProgramar(a, d, idsMarcados, fecha) {
+    const fechaIn = el('input', { type: 'date', value: fecha });
+    const rep = selectorRepetir();
+    const ok = await dialogo({
+      titulo: 'Programar sesión',
+      cuerpo: [el('label.campo', el('span', 'Fecha'), fechaIn), el('label.campo', el('span', 'Repetición'), rep)],
+      botones: [
+        { texto: 'Cancelar', valor: false },
+        { texto: 'Programar', valor: true, primario: true },
+      ],
+    });
+    if (!ok || !fechaIn.value) return;
+    try {
+      const n = await programar(a, idsMarcados, fechaIn.value, +rep.value);
+      aviso(n === 1 ? `Programada el ${fechaCorta(fechaIn.value)}` : `${n} sesiones programadas`);
+      ir(`#/atleta/${a.id}/plan/${fechaIn.value.slice(0, 7)}`);
+    } catch (e) {
+      aviso(errorTexto(e), 'error');
+    }
+  }
+
+  /* --- Pestaña Planificación: calendario mensual --- */
+  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+  function pintarPlanificacion(contenido, a, d, mesArg) {
+    const h = Datos.hoy();
+    const mes = /^\d{4}-\d{2}$/.test(mesArg || '') ? mesArg : h.slice(0, 7);
+    const [Y, M] = mes.split('-').map(Number);
+    const primero = `${mes}-01`;
+    const inicio = Datos.lunes(primero);
+    const otroMes = (delta) => {
+      const dd = new Date(Y, M - 1 + delta, 1);
+      return `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, '0')}`;
+    };
+    const porDia = {};
+    d.sesiones.forEach((s) => (porDia[s.fecha] = porDia[s.fecha] || []).push(s));
+    const celdas = [];
+    let f = inicio;
+    do {
+      for (let i = 0; i < 7; i++) {
+        const fecha = f;
+        const delMes = fecha.slice(0, 7) === mes;
+        const ses = (porDia[fecha] || []).slice().sort((x, y) => (x.titulo || '').localeCompare(y.titulo || ''));
+        celdas.push(
+          el(
+            'div.dia' + (delMes ? '' : '.fuera') + (fecha === h ? '.hoy' : ''),
+            { role: 'gridcell' },
+            el(
+              'button.dia-num',
+              { type: 'button', 'aria-label': `${fechaBonita(fecha)}: ${ses.length ? ses.length + ' sesiones' : 'sin sesiones'}. Añadir o ver`, onclick: () => dialogoDia(a, fecha) },
+              el('span', +fecha.slice(8)),
+              el('span.mas', { 'aria-hidden': 'true' }, '+')
+            ),
+            ses.map((s) => {
+              const cs = Datos.cumplimientoSesion(s, d.registros[s.id]);
+              return el('a.chip-sesion.tono-borde-' + (cs.estado === 'completada' ? colorPct(cs.pct) : ESTADOS[cs.estado][1]), { href: `#/atleta/${a.id}/sesion/${s.id}`, title: `${s.titulo || 'Sesión'} · ${ESTADOS[cs.estado][0]}` }, s.titulo || 'Sesión');
+            })
+          )
+        );
+        f = Datos.sumarDias(f, 1);
+      }
+    } while (f.slice(0, 7) === mes);
+
+    contenido.replaceChildren(
+      el(
+        'div.cal-nav',
+        el('a.btn.btn-peq.btn-claro', { href: `#/atleta/${a.id}/plan/${otroMes(-1)}`, 'aria-label': 'Mes anterior' }, '‹'),
+        el('h2.cal-titulo', `${MESES[M - 1]} ${Y}`.replace(/^./, (c) => c.toUpperCase())),
+        el('a.btn.btn-peq.btn-claro', { href: `#/atleta/${a.id}/plan/${otroMes(1)}`, 'aria-label': 'Mes siguiente' }, '›'),
+        mes !== h.slice(0, 7) && el('a.btn.btn-peq.btn-claro', { href: `#/atleta/${a.id}/plan/${h.slice(0, 7)}` }, 'Hoy')
+      ),
+      el(
+        'div.calendario',
+        { role: 'grid', 'aria-label': 'Calendario de ' + a.nombre },
+        ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((x) => el('div.cal-cab', { role: 'columnheader' }, x)),
+        celdas
+      ),
+      el(
+        'div.leyenda.leyenda-blanca',
+        el('span', el('i.tono-gris'), 'Pendiente'),
+        el('span', el('i.tono-medio'), 'A medias'),
+        el('span', el('i.tono-ok'), 'Cumplida ≥90%'),
+        el('span', el('i.tono-mal'), 'No hecha / <60%')
+      ),
+      d.plantillas.length ? el('p.ayuda-blanca', 'Pulsa el número de un día para añadir sesiones diseñadas. Pulsa una sesión para ver lo que ha registrado el atleta.') : el('div.nota.nota-alerta', 'Primero diseña alguna sesión en la pestaña «Sesiones».')
+    );
+  }
+
+  async function dialogoDia(a, fecha) {
+    const d = S.atletas[a.id];
+    const ses = d.sesiones.filter((s) => s.fecha === fecha);
+    const marcados = new Set();
+    const rep = selectorRepetir();
+    const lista = el(
+      'div.lista-dia',
+      ses.map((s) => {
+        const cs = Datos.cumplimientoSesion(s, d.registros[s.id]);
+        return el('div.fila-dia', el('a', { href: `#/atleta/${a.id}/sesion/${s.id}`, onclick: () => cerrarDialogo() }, s.titulo || 'Sesión'), chipEstado(cs));
+      })
+    );
+    let cerrarDialogo = () => {};
+    const promesa = dialogo({
+      titulo: fechaBonita(fecha),
+      cuerpo: [
+        ses.length ? [el('h3', 'Programadas'), lista] : el('p.meta', 'No hay sesiones este día.'),
+        el('h3', 'Añadir sesiones diseñadas'),
+        (d.plantillas || []).length
+          ? el(
+              'div.chips',
+              d.plantillas.map((p) => el('label.chip-check', el('input', { type: 'checkbox', onchange: (e) => (e.target.checked ? marcados.add(p.id) : marcados.delete(p.id)) }), p.titulo || 'Sesión'))
+            )
+          : el('p', 'No hay sesiones diseñadas. ', el('a', { href: `#/atleta/${a.id}/disenar/nueva`, onclick: () => cerrarDialogo() }, 'Diseña la primera')),
+        (d.plantillas || []).length && el('label.campo', el('span', 'Repetición'), rep),
+      ],
+      botones: [
+        { texto: 'Cerrar', valor: false },
+        ...((d.plantillas || []).length ? [{ texto: 'Añadir', valor: true, primario: true }] : []),
+      ],
+    });
+    cerrarDialogo = () => {
+      const dl = document.querySelector('dialog.dialogo');
+      if (dl) {
+        dl.close();
+        dl.remove();
+      }
+    };
+    const ok = await promesa;
+    if (!ok || !marcados.size) return;
+    try {
+      const n = await programar(a, [...marcados], fecha, +rep.value);
+      aviso(n === 1 ? 'Sesión añadida' : `${n} sesiones añadidas`);
+      render();
+    } catch (e) {
+      aviso(errorTexto(e), 'error');
+    }
+  }
+
+  /* ---------- Revisión de una sesión programada (entrenador) ---------- */
   async function vistaRevision(id, sid) {
     const a = atletaPorId(id);
     if (!a) return ir('#/');
     cargando();
     const d = await datosAtleta(a, true);
     const s = d && d.sesiones.find((x) => x.id === sid);
-    if (!s) return ir('#/atleta/' + id);
+    if (!s) return ir(`#/atleta/${id}/plan`);
     const reg = d.registros[sid];
     const cs = Datos.cumplimientoSesion(s, reg);
     const bloques = s.items.map((it) => {
       const def = defItem(it);
       const r = reg && reg.items && reg.items[it.uid];
-      const unidad = it.tipo === 'seg' ? 's' : 'reps';
       const filas = it.series.map((obj, i) => {
         const real = r && r.series && r.series[i];
         const pct = Math.round(Datos.cumplimientoSerie(obj, real) * 100);
-        const hecho = real && (Datos.num(real.reps) != null || Datos.num(real.kg) != null || real.hecho);
-        return el(
-          'tr',
-          el('td', i + 1),
-          el('td', `${obj.reps || '—'} ${unidad}${obj.kg ? ' · ' + obj.kg + ' kg' : ''}`),
-          el('td', hecho ? `${real.reps != null && real.reps !== '' ? real.reps : '—'} ${unidad}${real.kg != null && real.kg !== '' ? ' · ' + real.kg + ' kg' : ''}` : '—'),
-          el('td', el('span.pct-mini.tono-' + colorPct(hecho ? pct : 0), hecho ? pct + '%' : '0%'))
-        );
+        const hecho = real && (Datos.num(real.reps) != null || Datos.num(real.kg) != null || Datos.num(real.km) != null || real.hecho);
+        return el('tr', el('td', i + 1), el('td', textoSerie(it, obj)), el('td', hecho ? textoSerie(it, real) : '—'), el('td', el('span.pct-mini.tono-' + colorPct(hecho ? pct : 0), hecho ? pct + '%' : '0%')));
       });
-      const extra = r && r.series ? r.series.slice(it.series.length).filter((x) => x && (x.reps || x.kg)) : [];
+      const extra = r && r.series ? r.series.slice(it.series.length).filter((x) => x && (x.reps || x.kg || x.km)) : [];
       return el(
         'div.tarjeta.revision-ej',
-        el('div.revision-cab', Figuras.ilustracion(def, { compacto: true }), el('div', el('h3', def.nombre), el('span.meta', 'Pautado: ' + textoObjetivo(it)), it.nota && el('span.meta', 'Tu nota: ' + it.nota))),
+        el('div.revision-cab', Figuras.ilustracion(def, { compacto: true }), el('div', el('h3', def.nombre), el('span.meta', 'Pautado: ' + textoObjetivo(it)), it.nota && el('span.meta', 'Tu indicación: ' + it.nota))),
         el('table.tabla', el('thead', el('tr', el('th', 'Serie'), el('th', 'Pautado'), el('th', 'Realizado'), el('th', ''))), el('tbody', filas)),
-        extra.length > 0 && el('p.ayuda', `Hizo ${extra.length} serie(s) extra: ` + extra.map((x) => `${x.reps || '—'}${x.kg ? '×' + x.kg + 'kg' : ''}`).join(', ')),
+        extra.length > 0 && el('p.ayuda', `Hizo ${extra.length} serie(s) extra: ` + extra.map((x) => textoSerie(it, x)).join(', ')),
         r && r.nota && el('div.nota.nota-info', el('b', 'Comentario del atleta: '), r.nota)
       );
     });
     app.replaceChildren(
-      pestanasEntrenador('#/'),
-      el('a.volver', { href: '#/atleta/' + id }, '← ' + a.nombre),
+      el('a.volver', { href: `#/atleta/${id}/plan/${s.fecha.slice(0, 7)}` }, '← Planificación de ' + a.nombre),
       el('div.cabecera', el('div', el('h1', s.titulo || 'Sesión'), el('span.ayuda-blanca', fechaBonita(s.fecha) + ' · ' + a.nombre))),
       el(
         'div.tarjeta.resumen',
@@ -626,60 +893,74 @@
       ...bloques,
       el(
         'div.fila-botones.acciones-pie',
-        el('a.btn.btn-primario', { href: `#/atleta/${id}/editar/${sid}` }, 'Editar'),
-        el('button.btn', { type: 'button', onclick: () => duplicarSesion(a, s) }, 'Duplicar'),
-        el('button.btn.btn-peligro', { type: 'button', onclick: () => borrarSesion(a, s) }, 'Eliminar')
+        el('a.btn.btn-primario', { href: `#/atleta/${id}/sesion/${sid}/editar` }, 'Editar este día'),
+        el('button.btn', { type: 'button', onclick: () => moverSesion(a, s) }, 'Cambiar de día'),
+        el('button.btn.btn-peligro', { type: 'button', onclick: () => borrarSesion(a, s) }, 'Quitar del calendario')
       )
     );
   }
 
-  async function borrarSesion(a, s) {
-    if (!(await confirmar('Eliminar sesión', `¿Eliminar «${s.titulo || 'Sesión'}» del ${fechaCorta(s.fecha)}? También se borra lo que haya registrado el atleta.`, 'Eliminar', true))) return;
+  async function moverSesion(a, s) {
+    const f = el('input', { type: 'date', value: s.fecha });
+    const ok = await dialogo({
+      titulo: 'Cambiar de día',
+      cuerpo: el('label.campo', el('span', 'Nueva fecha'), f),
+      botones: [
+        { texto: 'Cancelar', valor: false },
+        { texto: 'Mover', valor: true, primario: true },
+      ],
+    });
+    if (!ok || !f.value || f.value === s.fecha) return;
     try {
       await Datos.modificarAtleta(a, (d) => {
-        d.sesiones = d.sesiones.filter((x) => x.id !== s.id);
-        delete d.registros[s.id];
+        const x = d.sesiones.find((y) => y.id === s.id);
+        if (x) x.fecha = f.value;
       });
-      aviso('Sesión eliminada');
-      ir('#/atleta/' + a.id);
+      aviso('Sesión movida al ' + fechaCorta(f.value));
+      render();
     } catch (e) {
       aviso(errorTexto(e), 'error');
     }
   }
 
-  function duplicarSesion(a, s) {
-    S.borrador = { ...JSON.parse(JSON.stringify(s)), id: null, fecha: sumarDias(s.fecha < Datos.hoy() ? Datos.hoy() : s.fecha, 7), destino: [a.id] };
-    ir(`#/atleta/${a.id}/editar/copia`);
+  async function borrarSesion(a, s) {
+    if (!(await confirmar('Quitar del calendario', `¿Quitar «${s.titulo || 'Sesión'}» del ${fechaCorta(s.fecha)}? También se borra lo que haya registrado el atleta. El diseño de la sesión se conserva.`, 'Quitar', true))) return;
+    try {
+      await Datos.modificarAtleta(a, (d) => {
+        d.sesiones = d.sesiones.filter((x) => x.id !== s.id);
+        delete d.registros[s.id];
+      });
+      aviso('Sesión quitada');
+      ir(`#/atleta/${a.id}/plan/${s.fecha.slice(0, 7)}`);
+    } catch (e) {
+      aviso(errorTexto(e), 'error');
+    }
   }
 
-  /* ---------- Editor de sesión ---------- */
-  async function vistaEditor(idAtleta, sid) {
-    const a = idAtleta && atletaPorId(idAtleta);
+  /* ---------- Editor: diseñar una sesión (plantilla) o editar un día concreto (instancia) ---------- */
+  function nuevaSerie(tipo, base) {
+    if (tipo === 'km') return { km: (base && base.km) || 5, zona: (base && base.zona) || 'Z2' };
+    return { reps: base && base.reps != null ? base.reps : tipo === 'seg' ? 30 : 10, kg: base ? base.kg ?? null : null };
+  }
+
+  async function vistaEditor(idAtleta, modo, xid) {
+    const a = atletaPorId(idAtleta);
+    if (!a) return ir('#/');
+    cargando();
+    const d = await datosAtleta(a, true);
     let s;
-    if (sid === 'copia' && S.borrador) s = S.borrador;
-    else if (sid && a) {
-      cargando();
-      const d = await datosAtleta(a, true);
-      s = d && d.sesiones.find((x) => x.id === sid);
-      if (!s) return ir('#/atleta/' + idAtleta);
-      s = JSON.parse(JSON.stringify(s));
-    } else {
-      const unico = S.sesion.datos.atletas.length === 1 ? [S.sesion.datos.atletas[0].id] : [];
-      s = { id: null, fecha: Datos.hoy(), titulo: '', notas: '', items: [], destino: a ? [a.id] : unico };
-    }
+    if (modo === 'plantilla' && xid === 'copia' && S.borrador) s = S.borrador;
+    else if (modo === 'plantilla' && xid !== 'nueva' && xid !== 'copia') s = (d.plantillas || []).find((x) => x.id === xid);
+    else if (modo === 'instancia') s = d.sesiones.find((x) => x.id === xid);
+    else s = { id: null, titulo: '', notas: '', items: [] };
+    if (!s) return ir(`#/atleta/${a.id}/sesiones`);
+    s = JSON.parse(JSON.stringify(s));
     S.borrador = null;
-    const editando = !!s.id;
-    const destino = new Set(s.destino || (a ? [a.id] : []));
+    const esPlantilla = modo === 'plantilla';
+    const volver = esPlantilla ? `#/atleta/${a.id}/sesiones` : `#/atleta/${a.id}/sesion/${s.id}`;
     const lista = el('div.items-editor');
-    const volver = a ? (editando ? `#/atleta/${a.id}/sesion/${s.id}` : '#/atleta/' + a.id) : '#/';
 
-    const pintarItems = () => {
-      lista.replaceChildren(
-        ...s.items.map((it, idx) => editorItem(it, idx)),
-        s.items.length ? '' : el('p.vacio', 'Añade el primer ejercicio.')
-      );
-    };
-
+    const pintarItems = () => lista.replaceChildren(...s.items.map((it, idx) => editorItem(it, idx)), s.items.length ? '' : el('p.vacio-blanco', 'Añade el primer ejercicio.'));
     const mover = (i, delta) => {
       const [x] = s.items.splice(i, 1);
       s.items.splice(i + delta, 0, x);
@@ -690,18 +971,23 @@
       const def = defItem(it);
       const filas = el('div.series-editor');
       const pintarSeries = () => {
+        const km = it.tipo === 'km';
         filas.replaceChildren(
-          el('div.serie-ed.cab', el('span', '#'), el('span', it.tipo === 'seg' ? 'Segundos' : 'Repeticiones'), el('span', 'Kg'), el('span')),
+          el('div.serie-ed.cab', el('span', '#'), el('span', km ? 'Km' : it.tipo === 'seg' ? 'Segundos' : 'Repeticiones'), el('span', km ? 'Intensidad' : 'Kg'), el('span')),
           ...it.series.map((se, i) =>
             el(
               'div.serie-ed',
               el('span.n', i + 1),
-              el('input', { type: 'number', inputmode: 'numeric', min: 0, value: se.reps ?? '', 'aria-label': `Serie ${i + 1}: ${it.tipo === 'seg' ? 'segundos' : 'repeticiones'}`, oninput: (e) => (se.reps = Datos.num(e.target.value)) }),
-              el('input', { type: 'number', inputmode: 'decimal', min: 0, step: 0.5, value: se.kg ?? '', placeholder: '—', 'aria-label': `Serie ${i + 1}: kilos`, oninput: (e) => (se.kg = Datos.num(e.target.value)) }),
+              km
+                ? el('input', { type: 'number', inputmode: 'decimal', min: 0, step: 0.1, value: se.km ?? '', 'aria-label': `Serie ${i + 1}: kilómetros`, oninput: (e) => (se.km = Datos.num(e.target.value)) })
+                : el('input', { type: 'number', inputmode: 'numeric', min: 0, value: se.reps ?? '', 'aria-label': `Serie ${i + 1}: ${it.tipo === 'seg' ? 'segundos' : 'repeticiones'}`, oninput: (e) => (se.reps = Datos.num(e.target.value)) }),
+              km
+                ? el('select', { 'aria-label': `Serie ${i + 1}: zona de intensidad`, onchange: (e) => (se.zona = e.target.value) }, Datos.ZONAS.map((z) => el('option', { value: z, selected: se.zona === z }, Datos.NOMBRES_ZONA[z])))
+                : el('input', { type: 'number', inputmode: 'decimal', min: 0, step: 0.5, value: se.kg ?? '', placeholder: '—', 'aria-label': `Serie ${i + 1}: kilos`, oninput: (e) => (se.kg = Datos.num(e.target.value)) }),
               el('button.btn.btn-icono.btn-peq', { type: 'button', 'aria-label': 'Quitar serie ' + (i + 1), disabled: it.series.length < 2, onclick: () => (it.series.splice(i, 1), pintarSeries()) }, '✕')
             )
           ),
-          el('button.btn.btn-peq', { type: 'button', onclick: () => (it.series.push({ ...(it.series[it.series.length - 1] || { reps: 10, kg: null }) }), pintarSeries()) }, '+ Serie')
+          el('button.btn.btn-peq', { type: 'button', onclick: () => (it.series.push(nuevaSerie(it.tipo, it.series[it.series.length - 1])), pintarSeries()) }, km ? '+ Tramo' : '+ Serie')
         );
       };
       pintarSeries();
@@ -716,7 +1002,7 @@
               pintarItems();
             }
           } }, Figuras.ilustracion(def, { compacto: true })),
-          el('div.item-ed-titulo', el('b', (idx + 1) + '. ' + def.nombre), el('button.enlace', { type: 'button', onclick: () => verEjercicio(def) }, 'Ver cómo se hace')),
+          el('div.item-ed-titulo', el('b', idx + 1 + '. ' + def.nombre), el('button.enlace', { type: 'button', onclick: () => verEjercicio(def) }, 'Ver cómo se hace')),
           el(
             'div.item-ed-mover',
             el('button.btn.btn-icono.btn-peq', { type: 'button', 'aria-label': 'Subir', disabled: idx === 0, onclick: () => mover(idx, -1) }, '↑'),
@@ -731,13 +1017,21 @@
             el('span', 'Se mide en'),
             el(
               'select',
-              { onchange: (e) => ((it.tipo = e.target.value), pintarSeries()) },
-              el('option', { value: 'reps', selected: it.tipo !== 'seg' }, 'Repeticiones'),
-              el('option', { value: 'seg', selected: it.tipo === 'seg' }, 'Segundos')
+              {
+                onchange: (e) => {
+                  const antes = it.tipo;
+                  it.tipo = e.target.value;
+                  if ((antes === 'km') !== (it.tipo === 'km')) it.series = it.series.map(() => nuevaSerie(it.tipo));
+                  pintarSeries();
+                },
+              },
+              el('option', { value: 'reps', selected: it.tipo === 'reps' || !it.tipo }, 'Repeticiones'),
+              el('option', { value: 'seg', selected: it.tipo === 'seg' }, 'Segundos'),
+              el('option', { value: 'km', selected: it.tipo === 'km' }, 'Kilómetros')
             )
           ),
           el('label.campo', el('span', 'Descanso'), el('input', { value: it.descanso || '', placeholder: 'p. ej. 90 s', oninput: (e) => (it.descanso = e.target.value) })),
-          el('label.campo.ancho', el('span', 'Indicaciones'), el('input', { value: it.nota || '', placeholder: 'p. ej. bajar en 3 segundos', oninput: (e) => (it.nota = e.target.value) }))
+          el('label.campo.ancho', el('span', 'Indicaciones'), el('input', { value: it.nota || '', placeholder: it.tipo === 'km' ? 'p. ej. ritmo 5:30/km, terreno llano' : 'p. ej. bajar en 3 segundos', oninput: (e) => (it.nota = e.target.value) }))
         ),
         filas
       );
@@ -746,63 +1040,61 @@
     const asignarEjercicio = (it, id) => {
       it.ej = id;
       const p = propios().find((x) => x.id === id);
-      it.def = p ? JSON.parse(JSON.stringify(p)) : null;
-      if (!it.def) delete it.def;
-      if (id === 'plancha' && !it.tipo) {
-        it.tipo = 'seg';
-        it.series = [{ reps: 30, kg: null }, { reps: 30, kg: null }, { reps: 30, kg: null }];
+      if (p) it.def = JSON.parse(JSON.stringify(p));
+      else delete it.def;
+      const def = defItem(it);
+      const tipo = def.tipo === 'km' || def.grupo === 'Carrera' ? 'km' : id === 'plancha' ? 'seg' : 'reps';
+      if (tipo !== it.tipo) {
+        it.tipo = tipo;
+        it.series = tipo === 'km' ? [nuevaSerie('km')] : [nuevaSerie(tipo), nuevaSerie(tipo), nuevaSerie(tipo)];
       }
     };
 
     const anadir = async () => {
       const id = await elegirEjercicio();
       if (!id) return;
-      const it = { uid: uid(), ej: id, tipo: '', series: [{ reps: 10, kg: null }, { reps: 10, kg: null }, { reps: 10, kg: null }] };
+      const it = { uid: uid(), ej: id, tipo: '', series: [] };
       asignarEjercicio(it, id);
-      it.tipo = it.tipo || 'reps';
       s.items.push(it);
       pintarItems();
       lista.lastElementChild && lista.lastElementChild.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
 
-    const elegirAtletas = !editando
-      ? el(
-          'div.tarjeta.destinatarios',
-          el('h2', 'Para'),
-          el(
-            'div.chips',
-            S.sesion.datos.atletas.map((x) =>
-              el('label.chip-check', el('input', { type: 'checkbox', checked: destino.has(x.id), onchange: (e) => (e.target.checked ? destino.add(x.id) : destino.delete(x.id)) }), x.nombre)
-            )
-          ),
-          el('p.ayuda', 'Si eliges varios atletas, cada uno recibe su copia de la sesión.')
-        )
-      : null;
-
     const guardar = async (btn) => {
-      if (!s.fecha) return aviso('Pon la fecha de la sesión.', 'error');
+      if (esPlantilla && !(s.titulo || '').trim()) return aviso('Ponle un título a la sesión.', 'error');
+      if (!esPlantilla && !s.fecha) return aviso('Pon la fecha.', 'error');
       if (!s.items.length) return aviso('Añade al menos un ejercicio.', 'error');
-      if (!editando && !destino.size) return aviso('Elige al menos un atleta.', 'error');
       btn.disabled = true;
       btn.textContent = 'Guardando…';
-      const limpia = { id: s.id, fecha: s.fecha, titulo: (s.titulo || '').trim(), notas: (s.notas || '').trim(), items: s.items.map((it) => ({ ...it, series: it.series.map((x) => ({ reps: x.reps, kg: x.kg })) })) };
+      const items = s.items.map((it) => ({ ...it, series: it.series.map((x) => (it.tipo === 'km' ? { km: x.km, zona: x.zona || 'Z2' } : { reps: x.reps, kg: x.kg })) }));
+      const limpia = { titulo: (s.titulo || '').trim(), notas: (s.notas || '').trim(), items };
       try {
-        if (editando) {
-          await Datos.modificarAtleta(a, (d) => {
-            const i = d.sesiones.findIndex((x) => x.id === s.id);
-            if (i < 0) d.sesiones.push(limpia);
-            else d.sesiones[i] = limpia;
+        if (esPlantilla) {
+          const id = s.id || uid();
+          let actualizadas = 0;
+          await Datos.modificarAtleta(a, (dd) => {
+            dd.plantillas = dd.plantillas || [];
+            const i = dd.plantillas.findIndex((x) => x.id === id);
+            const p = { id, ...limpia };
+            if (i < 0) dd.plantillas.push(p);
+            else dd.plantillas[i] = p;
+            // Los días ya programados con esta sesión y aún sin registrar se actualizan
+            dd.sesiones.forEach((x) => {
+              if (x.plantilla === id && !tieneRegistro(dd, x.id)) {
+                Object.assign(x, JSON.parse(JSON.stringify(limpia)));
+                actualizadas++;
+              }
+            });
           });
-          aviso('Sesión guardada');
-          ir(`#/atleta/${a.id}/sesion/${s.id}`);
+          aviso(actualizadas ? `Sesión guardada. Actualizados ${actualizadas} día(s) programados sin registrar.` : 'Sesión guardada', 'ok', 4500);
         } else {
-          for (const idA of destino) {
-            const at = atletaPorId(idA);
-            await Datos.modificarAtleta(at, (d) => void d.sesiones.push({ ...JSON.parse(JSON.stringify(limpia)), id: uid() }));
-          }
-          aviso(destino.size > 1 ? `Sesión asignada a ${destino.size} atletas` : 'Sesión guardada');
-          ir(destino.size === 1 ? '#/atleta/' + [...destino][0] : '#/');
+          await Datos.modificarAtleta(a, (dd) => {
+            const x = dd.sesiones.find((y) => y.id === s.id);
+            if (x) Object.assign(x, limpia, { fecha: s.fecha });
+          });
+          aviso('Cambios guardados para este día');
         }
+        ir(volver);
       } catch (e) {
         aviso(errorTexto(e), 'error', 6000);
         btn.disabled = false;
@@ -811,28 +1103,197 @@
     };
 
     app.replaceChildren(
-      pestanasEntrenador('#/'),
       el('a.volver', { href: volver }, '← Volver'),
-      el('h1.titulo-blanco', editando ? 'Editar sesión' : 'Nueva sesión'),
-      elegirAtletas || '',
+      el('h1.titulo-blanco', esPlantilla ? (s.id ? 'Editar sesión' : 'Diseñar sesión') : 'Editar sesión de este día'),
+      el('p.ayuda-blanca', esPlantilla ? 'Para ' + a.nombre + '. Después podrás colocarla en el calendario las veces que quieras.' : `Solo cambia la sesión del ${fechaCorta(s.fecha)}. El diseño original no se modifica.`),
       el(
         'div.tarjeta',
         el(
           'div.rejilla',
-          el('label.campo', el('span', 'Fecha'), el('input', { type: 'date', value: s.fecha, required: true, onchange: (e) => (s.fecha = e.target.value) })),
-          el('label.campo', el('span', 'Título'), el('input', { value: s.titulo, placeholder: 'p. ej. Fuerza tren inferior', oninput: (e) => (s.titulo = e.target.value) })),
+          !esPlantilla && el('label.campo', el('span', 'Fecha'), el('input', { type: 'date', value: s.fecha, required: true, onchange: (e) => (s.fecha = e.target.value) })),
+          el('label.campo' + (esPlantilla ? '.ancho' : ''), el('span', 'Título'), el('input', { value: s.titulo, required: esPlantilla, placeholder: 'p. ej. Fuerza tren inferior', oninput: (e) => (s.titulo = e.target.value) })),
           el('label.campo.ancho', el('span', 'Indicaciones generales'), el('textarea', { rows: 2, placeholder: 'Calentamiento, objetivo de la sesión…', oninput: (e) => (s.notas = e.target.value) }, s.notas || ''))
         )
       ),
       lista,
       el('div.fila-botones', el('button.btn.btn-grande.btn-anadir', { type: 'button', onclick: anadir }, '+ Añadir ejercicio')),
-      el(
-        'div.barra-guardar',
-        el('a.btn', { href: volver }, 'Cancelar'),
-        el('button.btn.btn-primario', { type: 'button', onclick: (e) => guardar(e.currentTarget) }, 'Guardar')
-      )
+      el('div.barra-guardar', el('a.btn', { href: volver }, 'Cancelar'), el('button.btn.btn-primario', { type: 'button', onclick: (e) => guardar(e.currentTarget) }, 'Guardar'))
     );
     pintarItems();
+  }
+
+  /* ================= EVOLUCIÓN (entrenador y atleta) ================= */
+  const GRUPOS = ['Piernas', 'Cadera', 'Empuje', 'Tracción', 'Core', 'Potencia', 'Otros'];
+  const NOMBRE_GRUPO = { Piernas: 'Piernas', Cadera: 'Glúteos y cadera', Empuje: 'Empuje (pecho, hombro, tríceps)', Tracción: 'Tracción (espalda, bíceps)', Core: 'Core', Potencia: 'Potencia y pliometría', Otros: 'Otros' };
+  const grupoDe = (it) => {
+    const g = defItem(it).grupo;
+    return GRUPOS.includes(g) ? g : 'Otros';
+  };
+
+  function pintarEvolucion(contenido, datos, { guardar }) {
+    const semanas = S.evoSemanas || 12;
+    const metrica = S.evoMetrica || 'kg';
+    const ev = Datos.evolucion(datos, semanas, grupoDe);
+    const desde = ev.semanas[0];
+    const etiquetas = ev.semanas.map((w) => Graficas.corta(w));
+    const detalle = ev.semanas.map((w) => `Semana del ${Graficas.larga(w)}`);
+    const medidas = (datos.medidas || []).slice().sort((x, y) => x.fecha.localeCompare(y.fecha));
+    const enRango = medidas.filter((m) => m.fecha >= desde);
+
+    const rango = el(
+      'div.chips.chips-oscuros',
+      { role: 'group', 'aria-label': 'Periodo' },
+      [8, 12, 26, 52].map((n) => el('button.chip-filtro', { type: 'button', 'aria-pressed': String(n === semanas), onclick: () => ((S.evoSemanas = n), pintarEvolucion(contenido, datos, { guardar })) }, n === 52 ? '1 año' : `${n} semanas`))
+    );
+
+    const nuevaMedida = async (m) => {
+      const r = await dialogoMedida(m);
+      if (!r) return;
+      try {
+        const nuevos = await guardar(r.id, r.medida);
+        if (nuevos) Object.assign(datos, nuevos);
+        aviso(r.medida ? 'Medición guardada' : 'Medición eliminada');
+        pintarEvolucion(contenido, datos, { guardar });
+      } catch (e) {
+        aviso(errorTexto(e), 'error');
+      }
+    };
+
+    const vacio = (t) => el('p.vacio-grafica', t);
+    const tarjetaGrafica = (titulo, sub, cuerpo, extra) => el('section.tarjeta.tarjeta-grafica', el('div.fila-sep', el('div', el('h2', titulo), sub && el('p.meta', sub)), extra || ''), cuerpo);
+
+    // 1. Peso
+    const pesos = enRango.filter((m) => Datos.num(m.peso) != null).map((m) => ({ x: m.fecha, y: Datos.num(m.peso) }));
+    const gPeso = el('div');
+    const difPeso = pesos.length > 1 ? Math.round((pesos[pesos.length - 1].y - pesos[0].y) * 10) / 10 : null;
+    // 2. Volumen por grupo
+    const seriesGrupo = GRUPOS.map((g, i) => ({ nombre: NOMBRE_GRUPO[g], color: Graficas.CATEGORICA[i], valores: ev.grupos[g] ? ev.grupos[g][metrica] : [] })).filter((x) => x.valores.some((v) => v > 0));
+    const gVol = el('div');
+    // 3. Km
+    const seriesKm = Datos.ZONAS.map((z, i) => ({ nombre: Datos.NOMBRES_ZONA[z], color: Graficas.ORDINAL_AZUL[i], valores: ev.km[z].map((v) => Math.round(v * 10) / 10) })).filter((x) => x.valores.some((v) => v > 0));
+    const gKm = el('div');
+    const totalKm = Math.round(seriesKm.reduce((s, x) => s + x.valores.reduce((a, b) => a + b, 0), 0) * 10) / 10;
+    // 4. Pliegues
+    const pliegues = enRango.map((m) => ({ x: m.fecha, y: Datos.sumaPliegues(m) })).filter((p) => p.y != null);
+    const gPl = el('div');
+    const difPl = pliegues.length > 1 ? Math.round((pliegues[pliegues.length - 1].y - pliegues[0].y) * 10) / 10 : null;
+    const signo = (v) => (v > 0 ? '+' : '') + Graficas.fmt(v, 1);
+
+    contenido.replaceChildren(
+      el('div.cabecera', rango, el('button.btn.btn-primario', { type: 'button', onclick: () => nuevaMedida(null) }, '+ Añadir medición')),
+      tarjetaGrafica(
+        'Peso corporal',
+        pesos.length ? `Último: ${Graficas.fmt(pesos[pesos.length - 1].y, 1)} kg` + (difPeso != null ? ` (${signo(difPeso)} kg en el periodo)` : '') : null,
+        pesos.length ? [gPeso, Graficas.tabla(['Fecha', 'Peso (kg)'], pesos.map((p) => [Graficas.larga(p.x), Graficas.fmt(p.y, 1)]))] : vacio('Sin mediciones de peso en este periodo. Pulsa «+ Añadir medición».')
+      ),
+      tarjetaGrafica(
+        'Volumen por grupo muscular',
+        metrica === 'kg' ? 'Kilos totales levantados por semana (repeticiones × kilos registrados)' : 'Series hechas por semana',
+        seriesGrupo.length
+          ? [Graficas.leyenda(seriesGrupo), gVol, Graficas.tabla(['Semana', ...seriesGrupo.map((x) => x.nombre)], ev.semanas.map((w, i) => [Graficas.corta(w), ...seriesGrupo.map((x) => Graficas.fmt(x.valores[i] || 0))]))]
+          : vacio('Aún no hay series registradas en este periodo.'),
+        el(
+          'div.segmentado.segmentado-peq',
+          { role: 'radiogroup', 'aria-label': 'Medida del volumen' },
+          [
+            ['kg', 'Kilos'],
+            ['series', 'Series'],
+          ].map(([v, t]) => el('button', { type: 'button', role: 'radio', 'aria-checked': String(metrica === v), onclick: () => ((S.evoMetrica = v), pintarEvolucion(contenido, datos, { guardar })) }, t))
+        )
+      ),
+      tarjetaGrafica(
+        'Kilómetros e intensidad',
+        `Km registrados por semana, por zona de intensidad${totalKm ? ` · total ${Graficas.fmt(totalKm, 1)} km` : ''}`,
+        seriesKm.length
+          ? [
+              Graficas.leyenda(seriesKm),
+              gKm,
+              Graficas.tabla(['Semana', ...seriesKm.map((x) => x.nombre.split(' ·')[0]), 'Pautados'], ev.semanas.map((w, i) => [Graficas.corta(w), ...seriesKm.map((x) => Graficas.fmt(x.valores[i] || 0, 1)), Graficas.fmt(ev.kmPautados[i], 1)])),
+            ]
+          : vacio('Aún no hay kilómetros registrados en este periodo. Añade el ejercicio «Carrera» a las sesiones.')
+      ),
+      tarjetaGrafica(
+        'Suma de pliegues',
+        pliegues.length ? `Última: ${Graficas.fmt(pliegues[pliegues.length - 1].y, 1)} mm` + (difPl != null ? ` (${signo(difPl)} mm en el periodo)` : '') + ' · 6 pliegues' : 'Suma de 6 pliegues cutáneos (mm)',
+        pliegues.length ? [gPl, Graficas.tabla(['Fecha', 'Suma (mm)'], pliegues.map((p) => [Graficas.larga(p.x), Graficas.fmt(p.y, 1)]))] : vacio('Sin mediciones de pliegues en este periodo.')
+      ),
+      el(
+        'section.tarjeta',
+        el('h2', 'Mediciones'),
+        medidas.length
+          ? el(
+              'table.tabla',
+              el('thead', el('tr', el('th', 'Fecha'), el('th', 'Peso'), el('th', 'Σ pliegues'), el('th', ''))),
+              el(
+                'tbody',
+                medidas
+                  .slice()
+                  .reverse()
+                  .map((m) =>
+                    el(
+                      'tr',
+                      el('td', fechaCorta(m.fecha)),
+                      el('td', m.peso != null ? Graficas.fmt(m.peso, 1) + ' kg' : '—'),
+                      el('td', Datos.sumaPliegues(m) != null ? Graficas.fmt(Datos.sumaPliegues(m), 1) + ' mm' : '—'),
+                      el('td', el('button.btn.btn-peq', { type: 'button', onclick: () => nuevaMedida(m) }, 'Editar'))
+                    )
+                  )
+              )
+            )
+          : el('p.meta', 'Todavía no hay mediciones.')
+      )
+    );
+    if (pesos.length) Graficas.lineas(gPeso, { puntos: pesos, unidad: 'kg', decimales: 1, color: Graficas.CATEGORICA[0] });
+    if (seriesGrupo.length) Graficas.barras(gVol, { categorias: etiquetas, detalle, series: seriesGrupo, unidad: metrica === 'kg' ? 'kg' : 'series' });
+    if (seriesKm.length) Graficas.barras(gKm, { categorias: etiquetas, detalle, series: seriesKm, unidad: 'km', decimales: 1 });
+    if (pliegues.length) Graficas.lineas(gPl, { puntos: pliegues, unidad: 'mm', decimales: 1, color: Graficas.CATEGORICA[1] });
+  }
+
+  /** Diálogo para añadir o editar una medición. Devuelve { id, medida } (medida null = borrar) o null. */
+  async function dialogoMedida(m) {
+    const x = m ? JSON.parse(JSON.stringify(m)) : { fecha: Datos.hoy(), peso: null, pliegues: {} };
+    x.pliegues = x.pliegues || {};
+    const fecha = el('input', { type: 'date', value: x.fecha });
+    const peso = el('input', { type: 'number', inputmode: 'decimal', step: 0.1, min: 0, value: x.peso ?? '' });
+    const total = el('output.total-pliegues');
+    const entradas = Datos.PLIEGUES.map(([k, t]) => {
+      const i = el('input', { type: 'number', inputmode: 'decimal', step: 0.5, min: 0, value: x.pliegues[k] ?? '', oninput: () => calc() });
+      i.dataset.k = k;
+      return el('label.campo', el('span', t + ' (mm)'), i);
+    });
+    const sumaDirecta = el('input', { type: 'number', inputmode: 'decimal', step: 0.5, min: 0, value: x.suma ?? '', placeholder: 'Solo si no tienes el desglose', oninput: () => calc() });
+    const calc = () => {
+      const v = entradas.map((e) => Datos.num(e.querySelector('input').value)).filter((n) => n != null);
+      const s = Datos.num(sumaDirecta.value) ?? (v.length ? v.reduce((a, b) => a + b, 0) : null);
+      total.textContent = s == null ? '—' : Graficas.fmt(s, 1) + ' mm';
+    };
+    calc();
+    const r = await dialogo({
+      titulo: m ? 'Editar medición' : 'Nueva medición',
+      cuerpo: [
+        el('div.rejilla', el('label.campo', el('span', 'Fecha'), fecha), el('label.campo', el('span', 'Peso (kg)'), peso)),
+        el('h3', 'Pliegues cutáneos'),
+        el('div.rejilla.rejilla-pliegues', entradas),
+        el('label.campo', el('span', 'O suma total directamente (mm)'), sumaDirecta),
+        el('p', el('b', 'Suma: '), total),
+      ],
+      botones: [...(m ? [{ texto: 'Eliminar', valor: 'borrar', peligro: true }] : []), { texto: 'Cancelar', valor: null }, { texto: 'Guardar', valor: 'guardar', primario: true }],
+    });
+    if (!r) return null;
+    const id = (m && m.id) || uid();
+    if (r === 'borrar') return (await confirmar('Eliminar medición', '¿Eliminar la medición del ' + fechaCorta(m.fecha) + '?', 'Eliminar', true)) ? { id, medida: null } : null;
+    const pl = {};
+    entradas.forEach((e) => {
+      const inp = e.querySelector('input');
+      const v = Datos.num(inp.value);
+      if (v != null) pl[inp.dataset.k] = v;
+    });
+    const medida = { fecha: fecha.value || Datos.hoy(), peso: Datos.num(peso.value), pliegues: Object.keys(pl).length ? pl : null, suma: Datos.num(sumaDirecta.value) };
+    if (medida.peso == null && !medida.pliegues && medida.suma == null) {
+      aviso('Escribe el peso o algún pliegue.', 'error');
+      return null;
+    }
+    return { id, medida };
   }
 
   /* ---------- Biblioteca de ejercicios ---------- */
@@ -847,7 +1308,7 @@
     const grupos = {};
     catalogo().forEach((e) => (grupos[e.grupo] = grupos[e.grupo] || []).push(e));
     app.replaceChildren(
-      pestanasEntrenador('#/ejercicios'),
+      pestanasEntrenador('ejercicios'),
       el('div.cabecera', el('h1', 'Ejercicios'), el('button.btn.btn-primario', { type: 'button', onclick: () => editarPropio(null) }, '+ Ejercicio propio')),
       el('p.ayuda-blanca', 'Pulsa un ejercicio para ver la animación y la explicación que verá el atleta. Si falta alguno, créalo: puedes reutilizar un dibujo, subir una foto o enlazar un vídeo.'),
       pr.length > 0 && el('h2.titulo-seccion', 'Tus ejercicios'),
@@ -976,7 +1437,7 @@
     };
 
     app.replaceChildren(
-      pestanasEntrenador('#/ajustes'),
+      pestanasEntrenador('ajustes'),
       el('h1.titulo-blanco', 'Ajustes'),
       el(
         'div.tarjeta',
@@ -1050,28 +1511,43 @@
   }
 
   /* ================= ATLETA ================= */
-  async function vistaInicioAtleta() {
-    cargando();
+  const pestanasAtleta = (activa) =>
+    pestanas(
+      [
+        ['#/', 'Hoy', 'hoy'],
+        ['#/calendario', 'Calendario', 'calendario'],
+        ['#/evolucion', 'Evolución', 'evolucion'],
+      ],
+      activa
+    );
+
+  async function refrescarAtleta() {
     await Datos.releer(S.sesion).catch(() => (S.sesion.sinConexion = true));
     await Datos.aplicarPendientes(S.sesion);
-    const d = S.sesion.datos;
+    return S.sesion.datos;
+  }
+
+  function filaSesionAtleta(d, s) {
+    const cs = Datos.cumplimientoSesion(s, d.registros[s.id]);
+    return el(
+      'a.fila-sesion' + (s.fecha === Datos.hoy() ? '.es-hoy' : ''),
+      { href: '#/s/' + s.id, onclick: () => (S.volverAtleta = location.hash || '#/') },
+      el('div', el('b', s.titulo || 'Sesión'), el('span.meta', `${fechaBonita(s.fecha)} · ${s.items.map((it) => defItem(it).nombre).slice(0, 3).join(', ')}${s.items.length > 3 ? '…' : ''}`)),
+      el('div.fila-sesion-der', chipEstado(cs))
+    );
+  }
+
+  async function vistaInicioAtleta() {
+    cargando();
+    const d = await refrescarAtleta();
     const h = Datos.hoy();
     const ses = (d.sesiones || []).slice().sort((x, y) => x.fecha.localeCompare(y.fecha));
-    const fila = (s) => {
-      const cs = Datos.cumplimientoSesion(s, d.registros[s.id]);
-      return el(
-        'a.fila-sesion' + (s.fecha === h ? '.es-hoy' : ''),
-        { href: '#/s/' + s.id },
-        el('div', el('b', s.titulo || 'Sesión'), el('span.meta', `${fechaBonita(s.fecha)} · ${s.items.length} ejercicios`)),
-        el('div.fila-sesion-der', chipEstado(cs))
-      );
-    };
     const deHoy = ses.filter((s) => s.fecha === h);
-    const proximas = ses.filter((s) => s.fecha > h);
-    const pendientesAtras = ses.filter((s) => s.fecha < h && !(d.registros[s.id] && d.registros[s.id].completada)).reverse();
-    const hechas = ses.filter((s) => s.fecha < h && d.registros[s.id] && d.registros[s.id].completada).reverse();
+    const proximas = ses.filter((s) => s.fecha > h).slice(0, 3);
+    const pendientesAtras = ses.filter((s) => s.fecha < h && s.fecha >= Datos.sumarDias(h, -14) && !(d.registros[s.id] && d.registros[s.id].completada)).reverse();
     const c = Datos.cumplimientoPeriodo(d);
     app.replaceChildren(
+      pestanasAtleta('hoy'),
       avisoModo() || '',
       el('h1.titulo-blanco', 'Hola, ' + d.atleta.nombre.split(' ')[0]),
       el(
@@ -1081,19 +1557,86 @@
         el('p.ayuda', d.entrenador ? 'Planificación de ' + d.entrenador : '')
       ),
       el('h2.titulo-seccion', 'Hoy'),
-      deHoy.length ? el('div.lista', deHoy.map(fila)) : el('p.vacio-blanco', 'Hoy no tienes sesión. ¡Descansa!'),
-      pendientesAtras.length > 0 && el('h2.titulo-seccion', 'Sin terminar'),
-      pendientesAtras.length > 0 && el('div.lista', pendientesAtras.slice(0, 10).map(fila)),
+      deHoy.length ? el('div.lista', deHoy.map((s) => filaSesionAtleta(d, s))) : el('p.vacio-blanco', 'Hoy no tienes sesión. ¡Descansa!'),
+      pendientesAtras.length > 0 && el('h2.titulo-seccion', 'Sin terminar (últimas 2 semanas)'),
+      pendientesAtras.length > 0 && el('div.lista', pendientesAtras.map((s) => filaSesionAtleta(d, s))),
       el('h2.titulo-seccion', 'Próximas'),
-      proximas.length ? el('div.lista', proximas.map(fila)) : el('p.vacio-blanco', 'No hay más sesiones programadas.'),
-      hechas.length > 0 && el('details.historial', el('summary', `Sesiones terminadas (${hechas.length})`), el('div.lista', hechas.map(fila))),
+      proximas.length ? el('div.lista', proximas.map((s) => filaSesionAtleta(d, s))) : el('p.vacio-blanco', 'No hay más sesiones programadas.'),
+      el('p', el('a.enlace-blanco', { href: '#/calendario' }, 'Ver el calendario completo →')),
       el('p', el('a.enlace-blanco', { href: '#/cuenta' }, 'Mi cuenta'))
     );
   }
 
+  /* --- Calendario semana a semana --- */
+  async function vistaCalendarioAtleta(arg) {
+    cargando();
+    const d = await refrescarAtleta();
+    const h = Datos.hoy();
+    const lun = Datos.lunes(/^\d{4}-\d{2}-\d{2}$/.test(arg || '') ? arg : h);
+    const dom = Datos.sumarDias(lun, 6);
+    const ses = (d.sesiones || []).filter((s) => s.fecha >= lun && s.fecha <= dom);
+    const hechas = ses.filter((s) => d.registros[s.id] && d.registros[s.id].completada).length;
+    const kmPaut = ses.reduce((t, s) => t + s.items.filter((it) => it.tipo === 'km').reduce((u, it) => u + it.series.reduce((v, x) => v + (Datos.num(x.km) || 0), 0), 0), 0);
+    const [, m1, d1] = lun.split('-');
+    const [, m2, d2] = dom.split('-');
+    const titulo = m1 === m2 ? `${+d1}–${+d2} de ${MESES[+m1 - 1]}` : `${+d1} ${MESES[+m1 - 1].slice(0, 3)} – ${+d2} ${MESES[+m2 - 1].slice(0, 3)}`;
+    const dias = Array.from({ length: 7 }, (_, i) => {
+      const f = Datos.sumarDias(lun, i);
+      const delDia = ses.filter((s) => s.fecha === f);
+      const nombre = DIAS[(i + 1) % 7];
+      return el(
+        'section.dia-semana' + (f === h ? '.hoy' : ''),
+        { 'aria-label': `${nombre} ${fechaCorta(f)}` },
+        el('div.dia-semana-cab', el('b', nombre.replace(/^./, (c) => c.toUpperCase())), el('span', +f.slice(8) + ' ' + MESES[+f.slice(5, 7) - 1].slice(0, 3)), f === h && el('span.chip.chip-hoy', 'Hoy')),
+        delDia.length
+          ? el(
+              'div.lista',
+              delDia.map((s) => {
+                const cs = Datos.cumplimientoSesion(s, d.registros[s.id]);
+                return el(
+                  'a.sesion-semana',
+                  { href: '#/s/' + s.id, onclick: () => (S.volverAtleta = location.hash) },
+                  el('div.fila-sep', el('b', s.titulo || 'Sesión'), chipEstado(cs)),
+                  el('ul.mini-lista', s.items.map((it) => el('li', defItem(it).nombre, el('small', ' · ' + textoObjetivo(it)))))
+                );
+              })
+            )
+          : el('p.descanso', 'Descanso')
+      );
+    });
+    app.replaceChildren(
+      pestanasAtleta('calendario'),
+      avisoModo() || '',
+      el(
+        'div.cal-nav',
+        el('a.btn.btn-peq.btn-claro', { href: '#/calendario/' + Datos.sumarDias(lun, -7), 'aria-label': 'Semana anterior' }, '‹'),
+        el('h2.cal-titulo', titulo),
+        el('a.btn.btn-peq.btn-claro', { href: '#/calendario/' + Datos.sumarDias(lun, 7), 'aria-label': 'Semana siguiente' }, '›'),
+        lun !== Datos.lunes(h) && el('a.btn.btn-peq.btn-claro', { href: '#/calendario' }, 'Esta semana')
+      ),
+      el('p.ayuda-blanca', ses.length ? `${ses.length} sesiones · ${hechas} terminadas${kmPaut ? ` · ${Graficas.fmt(kmPaut, 1)} km previstos` : ''}` : 'Sin sesiones esta semana.'),
+      el('div.semana', dias)
+    );
+  }
+
+  async function vistaEvolucionAtleta() {
+    cargando();
+    const d = await refrescarAtleta();
+    const contenido = el('div');
+    app.replaceChildren(pestanasAtleta('evolucion'), avisoModo() || '', el('h1.titulo-blanco', 'Mi evolución'), contenido);
+    pintarEvolucion(contenido, d, {
+      guardar: async (mid, medida) => {
+        const nuevos = await Datos.guardarMedida(S.sesion.ruta, S.sesion.dek, mid, medida);
+        S.sesion.datos = nuevos;
+        await Datos.aplicarPendientes(S.sesion);
+        return S.sesion.datos;
+      },
+    });
+  }
+
   function vistaCuentaAtleta() {
     app.replaceChildren(
-      el('a.volver', { href: '#/' }, '← Inicio'),
+      pestanasAtleta(''),
       el('h1.titulo-blanco', 'Mi cuenta'),
       el('div.tarjeta', el('p', el('b', 'Usuario: '), S.sesion.datos.atleta.usuario), el('button.btn', { type: 'button', onclick: () => cambiarMiPassword() }, 'Cambiar contraseña'))
     );
@@ -1103,6 +1646,7 @@
     const d = S.sesion.datos;
     const s = (d.sesiones || []).find((x) => x.id === sid);
     if (!s) return ir('#/');
+    const volver = S.volverAtleta || '#/';
     const reg = JSON.parse(JSON.stringify(d.registros[sid] || { items: {}, rpe: null, comentario: '', completada: null }));
     reg.items = reg.items || {};
     const estadoGuardado = el('span.guardado', { role: 'status', 'aria-live': 'polite' });
@@ -1128,71 +1672,106 @@
       temporizador = setTimeout(hacer, 1200);
     };
 
+    const campo = (etq, attrs) => el('label.entrada', el('small', etq), el('input', attrs));
+
     const tarjetaItem = (it, idx) => {
       const def = defItem(it);
       const r = (reg.items[it.uid] = reg.items[it.uid] || { series: [], nota: '' });
+      const km = it.tipo === 'km';
       const unidad = it.tipo === 'seg' ? 'seg' : 'reps';
       const filas = el('div.series-atleta');
       const pintarFilas = () => {
         filas.replaceChildren(
           ...it.series.map((obj, i) => {
-            const real = (r.series[i] = r.series[i] || { reps: null, kg: null, hecho: false });
-            const completa = Datos.cumplimientoSerie(obj, real) >= 1;
-            const fila = el(
-              'div.serie-at' + (completa ? '.hecha' : real.reps != null || real.kg != null ? '.parcial' : ''),
+            const real = (r.series[i] = r.series[i] || (km ? { km: null, zona: null, hecho: false } : { reps: null, kg: null, hecho: false }));
+            const fila = el('div.serie-at');
+            const actualizarFila = () => {
+              const c = Datos.cumplimientoSerie(obj, real);
+              const algo = km ? real.km != null : real.reps != null || real.kg != null;
+              fila.classList.toggle('hecha', c >= 1);
+              fila.classList.toggle('parcial', c < 1 && algo);
+            };
+            const entradas = km
+              ? [
+                  campo('Km', {
+                    type: 'number',
+                    inputmode: 'decimal',
+                    min: 0,
+                    step: 0.1,
+                    value: real.km ?? '',
+                    placeholder: obj.km ?? '',
+                    'aria-label': `Tramo ${i + 1}, kilómetros hechos (objetivo ${obj.km || 'libre'})`,
+                    oninput: (e) => {
+                      real.km = Datos.num(e.target.value);
+                      real.hecho = real.km != null;
+                      if (real.hecho && !real.zona) {
+                        real.zona = obj.zona || 'Z2';
+                        $('select', fila).value = real.zona;
+                      }
+                      actualizarFila();
+                      guardar();
+                    },
+                  }),
+                  el(
+                    'label.entrada',
+                    el('small', 'Zona'),
+                    el(
+                      'select',
+                      { 'aria-label': `Tramo ${i + 1}, zona de intensidad`, onchange: (e) => ((real.zona = e.target.value || null), guardar()) },
+                      el('option', { value: '' }, '—'),
+                      Datos.ZONAS.map((z) => el('option', { value: z, selected: real.zona === z }, z))
+                    )
+                  ),
+                ]
+              : [
+                  campo(unidad === 'seg' ? 'Segundos' : 'Reps', {
+                    type: 'number',
+                    inputmode: 'numeric',
+                    min: 0,
+                    value: real.reps ?? '',
+                    placeholder: obj.reps ?? '',
+                    'aria-label': `Serie ${i + 1}, ${unidad === 'seg' ? 'segundos' : 'repeticiones'} hechas (objetivo ${obj.reps || 'libre'})`,
+                    oninput: (e) => {
+                      real.reps = Datos.num(e.target.value);
+                      real.hecho = real.reps != null;
+                      if (real.hecho && real.kg == null && obj.kg) {
+                        real.kg = obj.kg;
+                        $('input[data-kg]', fila).value = obj.kg;
+                      }
+                      actualizarFila();
+                      guardar();
+                    },
+                  }),
+                  campo('Kg', {
+                    type: 'number',
+                    inputmode: 'decimal',
+                    min: 0,
+                    step: 0.5,
+                    'data-kg': '',
+                    value: real.kg ?? '',
+                    placeholder: obj.kg ?? '—',
+                    'aria-label': `Serie ${i + 1}, kilos usados (objetivo ${obj.kg || 'sin peso'})`,
+                    oninput: (e) => {
+                      real.kg = Datos.num(e.target.value);
+                      actualizarFila();
+                      guardar();
+                    },
+                  }),
+                ];
+            fila.append(
               el('span.n', { 'aria-hidden': 'true' }, i + 1),
-              el('span.obj', el('small', 'Objetivo'), `${obj.reps || '—'} ${unidad}${obj.kg ? ' · ' + obj.kg + ' kg' : ''}`),
-              el(
-                'label.entrada',
-                el('small', unidad === 'seg' ? 'Segundos' : 'Reps'),
-                el('input', {
-                  type: 'number',
-                  inputmode: 'numeric',
-                  min: 0,
-                  value: real.reps ?? '',
-                  placeholder: obj.reps ?? '',
-                  'aria-label': `Serie ${i + 1}, ${unidad === 'seg' ? 'segundos' : 'repeticiones'} hechas (objetivo ${obj.reps || 'libre'})`,
-                  oninput: (e) => {
-                    real.reps = Datos.num(e.target.value);
-                    real.hecho = real.reps != null;
-                    if (real.hecho && real.kg == null && obj.kg) {
-                      real.kg = obj.kg;
-                      $('input[data-kg]', fila).value = obj.kg;
-                    }
-                    actualizarFila();
-                    guardar();
-                  },
-                })
-              ),
-              el(
-                'label.entrada',
-                el('small', 'Kg'),
-                el('input', {
-                  type: 'number',
-                  inputmode: 'decimal',
-                  min: 0,
-                  step: 0.5,
-                  'data-kg': '',
-                  value: real.kg ?? '',
-                  placeholder: obj.kg ?? '—',
-                  'aria-label': `Serie ${i + 1}, kilos usados (objetivo ${obj.kg || 'sin peso'})`,
-                  oninput: (e) => {
-                    real.kg = Datos.num(e.target.value);
-                    actualizarFila();
-                    guardar();
-                  },
-                })
-              ),
+              el('span.obj', el('small', 'Objetivo'), textoSerie(it, obj)),
+              ...entradas,
               el(
                 'button.btn-check',
                 {
                   type: 'button',
-                  'aria-label': `Serie ${i + 1} hecha tal cual`,
+                  'aria-label': `${km ? 'Tramo' : 'Serie'} ${i + 1} hecha tal cual`,
                   title: 'Hecha tal cual',
                   onclick: () => {
-                    const yaHecha = Datos.cumplimientoSerie(obj, real) >= 1 && real.reps === obj.reps;
-                    if (yaHecha) Object.assign(real, { reps: null, kg: null, hecho: false });
-                    else Object.assign(real, { reps: obj.reps, kg: obj.kg, hecho: true });
+                    const yaHecha = Datos.cumplimientoSerie(obj, real) >= 1;
+                    if (km) Object.assign(real, yaHecha ? { km: null, zona: null, hecho: false } : { km: obj.km, zona: obj.zona, hecho: true });
+                    else Object.assign(real, yaHecha ? { reps: null, kg: null, hecho: false } : { reps: obj.reps, kg: obj.kg, hecho: true });
                     pintarFilas();
                     guardar();
                   },
@@ -1200,26 +1779,21 @@
                 '✓'
               )
             );
-            const actualizarFila = () => {
-              const c = Datos.cumplimientoSerie(obj, real);
-              fila.classList.toggle('hecha', c >= 1);
-              fila.classList.toggle('parcial', c < 1 && (real.reps != null || real.kg != null));
-            };
+            actualizarFila();
             return fila;
           })
         );
       };
       pintarFilas();
-      const ficha = el('details.como', el('summary', 'Cómo se hace'), fichaEjercicio(def));
       return el(
         'section.tarjeta.ej-atleta',
         { 'aria-labelledby': 'ej-' + it.uid },
         el('div.ej-cab', el('span.ej-num', idx + 1), el('div', el('h2', { id: 'ej-' + it.uid }, def.nombre), el('span.objetivo', textoObjetivo(it)), it.descanso && el('span.meta', 'Descanso: ' + it.descanso))),
         Figuras.ilustracion(def),
         it.nota && el('div.nota.nota-info', el('b', 'Indicación: '), it.nota),
-        ficha,
+        el('details.como', el('summary', 'Cómo se hace'), fichaEjercicio(def)),
         filas,
-        el('label.campo', el('span', 'Comentario (opcional)'), el('input', { value: r.nota || '', placeholder: 'Molestias, sensaciones…', oninput: (e) => ((r.nota = e.target.value), guardar()) }))
+        el('label.campo', el('span', 'Comentario (opcional)'), el('input', { value: r.nota || '', placeholder: km ? 'Ritmo medio, sensaciones…' : 'Molestias, sensaciones…', oninput: (e) => ((r.nota = e.target.value), guardar()) }))
       );
     };
 
@@ -1232,24 +1806,28 @@
       )
     );
 
-    const terminar = el('button.btn.btn-primario.btn-grande', {
-      type: 'button',
-      onclick: async () => {
-        const cs = Datos.cumplimientoSesion(s, reg);
-        if (cs.hechas < cs.series && !(await confirmar('Terminar sesión', `Has registrado ${cs.hechas} de ${cs.series} series. ¿Terminar de todas formas?`, 'Terminar'))) return;
-        reg.completada = new Date().toISOString();
-        const ok = await guardar(true);
-        aviso(ok ? '¡Sesión terminada! Tu entrenador ya puede verla.' : 'Sesión terminada. Se enviará cuando tengas conexión.', ok ? 'ok' : 'alerta', 4500);
-        ir('#/');
+    const terminar = el(
+      'button.btn.btn-primario.btn-grande',
+      {
+        type: 'button',
+        onclick: async () => {
+          const cs = Datos.cumplimientoSesion(s, reg);
+          if (cs.hechas < cs.series && !(await confirmar('Terminar sesión', `Has registrado ${cs.hechas} de ${cs.series} series. ¿Terminar de todas formas?`, 'Terminar'))) return;
+          reg.completada = reg.completada || new Date().toISOString();
+          const ok = await guardar(true);
+          aviso(ok ? '¡Sesión terminada! Tu entrenador ya puede verla.' : 'Sesión terminada. Se enviará cuando tengas conexión.', ok ? 'ok' : 'alerta', 4500);
+          ir(volver);
+        },
       },
-    }, reg.completada ? 'Guardar cambios' : 'Terminar sesión');
+      reg.completada ? 'Guardar cambios' : 'Terminar sesión'
+    );
 
     app.replaceChildren(
-      el('a.volver', { href: '#/' }, '← Mis sesiones'),
+      el('a.volver', { href: volver }, '← Volver'),
       el('div.cabecera', el('div', el('h1', s.titulo || 'Sesión'), el('span.ayuda-blanca', fechaBonita(s.fecha)))),
       s.notas && el('div.tarjeta.indicaciones', el('b', 'Indicaciones del entrenador'), el('p', s.notas)),
       el('div.tarjeta.resumen.pegajoso', resumen, estadoGuardado),
-      el('p.ayuda-blanca', 'Escribe las repeticiones y los kilos que has hecho en cada serie. Si la has hecho tal cual estaba, pulsa ✓.'),
+      el('p.ayuda-blanca', 'Escribe lo que has hecho en cada serie. Si la has hecho tal cual estaba, pulsa ✓.'),
       ...s.items.map(tarjetaItem),
       el(
         'div.tarjeta',

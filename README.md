@@ -2,9 +2,17 @@
 
 App web (instalable en el móvil) para que un entrenador planifique las sesiones de sus atletas y vea cuánto han cumplido.
 
-- **Entrenador:** da de alta a sus atletas, crea sesiones (ejercicios, series, repeticiones, kilos, descansos e indicaciones), las asigna a uno o varios atletas y revisa lo que ha hecho cada uno: serie a serie, con porcentaje de cumplimiento.
-- **Atleta:** ve sus sesiones ordenadas por fecha (hoy, pendientes, próximas), y en cada ejercicio anota las repeticiones y los kilos que ha hecho. Si una serie la ha hecho tal cual, basta con pulsar ✓.
-- **Cada ejercicio lleva una ilustración animada** que muestra el movimiento, además de los pasos para hacerlo y los errores a evitar. Hay 23 ejercicios de serie y el entrenador puede crear los suyos (reutilizando un dibujo, con una foto o con un enlace a vídeo).
+- **Entrenador:** ve una tarjeta por atleta. Al pulsarla se abre su ficha, con tres pestañas:
+  - **Sesiones:** diseña las sesiones de ese atleta (título, ejercicios, series, repeticiones, kilos, kilómetros y zona de intensidad, descansos e indicaciones). Se pueden duplicar o copiar a otro atleta.
+  - **Planificación:** calendario mensual. Pulsando un día se añaden una o varias de las sesiones diseñadas (y se pueden repetir varias semanas). Cada sesión aparece en el día con un color según lo que ha cumplido el atleta; al pulsarla se ve serie a serie lo pautado frente a lo realizado.
+  - **Evolución:** las mismas gráficas que ve el atleta.
+- **Atleta:** tres pestañas:
+  - **Hoy:** la sesión del día, las que tiene sin terminar y las próximas. En cada ejercicio anota lo que ha hecho (si una serie la ha hecho tal cual, basta con pulsar ✓).
+  - **Calendario:** la planificación semana a semana.
+  - **Evolución:** gráficas de peso corporal, volumen de entrenamiento por grupo muscular (kilos o series por semana), kilómetros por semana según su intensidad (zonas Z1–Z5) y suma de 6 pliegues cutáneos. El atleta y el entrenador pueden añadir mediciones de peso y pliegues.
+- **Cada ejercicio lleva una ilustración animada** que muestra el movimiento, además de los pasos para hacerlo y los errores a evitar. Hay 24 ejercicios de serie (incluida la carrera, que se mide en kilómetros y zona) y el entrenador puede crear los suyos (reutilizando un dibujo, con una foto o con un enlace a vídeo).
+
+Si se edita una sesión diseñada, se actualizan también los días en que estaba programada y que el atleta aún no ha registrado. Las ya registradas no cambian.
 
 Funciona entera en **GitHub Pages**: no hace falta servidor ni base de datos. Los datos se guardan **cifrados** en el propio repositorio.
 
@@ -15,6 +23,8 @@ Cada serie pautada vale de 0 a 100 %:
 - Repeticiones: hechas ÷ pautadas (máximo 100 %).
 - Kilos (si se pautaron): usados ÷ pautados (máximo 100 %).
 - Se multiplican: 10 repeticiones de 10 con 60 de 60 kg = 100 %; 7 de 10 con 60 kg = 70 %; 10 de 10 con 50 de 60 kg = 83 %.
+
+- Carrera: kilómetros hechos ÷ pautados (máximo 100 %).
 
 El cumplimiento de la sesión es la media de sus series. El del atleta, la media de las sesiones de las últimas 4 semanas que ya han pasado (una sesión vencida sin registrar cuenta como 0 %).
 
@@ -33,7 +43,7 @@ El cumplimiento de la sesión es la media de sus series. El del atleta, la media
    - **Permissions → Contents:** «Read and write». Nada más.
    - Pégala en Ajustes y pulsa **«Comprobar y activar»**. Tus datos se suben al repositorio (carpeta `data/`).
 3. Da de alta a cada atleta (**Atletas → Añadir atleta**) y envíale el usuario y la contraseña que aparecen (botón «Copiar»).
-4. Crea sesiones con **«+ Nueva sesión»**.
+4. En su ficha, diseña sus sesiones (**Sesiones → Diseñar sesión**) y colócalas en el calendario (**Planificación**).
 
 Cada cambio queda guardado como un commit en el repositorio, así que el historial de Git sirve también de copia de seguridad. En **Ajustes** puedes además descargar una copia de todo.
 
@@ -56,6 +66,7 @@ index.html            La app (entrenador y atleta)
 js/app.js             Pantallas
 js/datos.js           Ficheros cifrados, sincronización, cola sin conexión y cálculo del cumplimiento
 js/figuras.js         Ilustraciones animadas y catálogo de ejercicios (pasos y claves)
+js/graficas.js        Gráficas de evolución (SVG, sin librerías)
 js/cripto.js          Cifrado
 js/github.js          Lectura y escritura en el repositorio (API de GitHub)
 js/util.js            Utilidades de interfaz

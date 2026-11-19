@@ -530,6 +530,23 @@
         con(DE_PIE, { cadera: [100, 64], tob1: [103, 130], tob2: [99, 130], f1: 310, f2: 310, b1: 85, a1: 88, b2: 87, a2: 90 }),
       ],
     },
+    {
+      id: 'carrera', nombre: 'Carrera', grupo: 'Carrera', material: 'Zapatillas', tipo: 'km', ciclo: true, mov: 230, pausa: 0,
+      musculos: 'Resistencia cardiovascular y piernas',
+      pasos: [
+        'Corre la distancia indicada a la intensidad (zona) que te marque el entrenador.',
+        'Z1 regenerativo: puedes hablar sin esfuerzo. Z2 aeróbico suave: conversación cómoda.',
+        'Z3 tempo: frases cortas. Z4 umbral: solo palabras sueltas. Z5 máximo: no puedes hablar.',
+        'Anota los kilómetros que hayas hecho y la zona en la que has ido la mayor parte del tiempo.',
+      ],
+      claves: ['Calienta 10 minutos suave antes de ir a zonas altas.', 'Tronco erguido, mirada al frente, brazos a 90° moviéndose hacia delante y atrás.', 'Pisa debajo de la cadera, no muy por delante.'],
+      poses: [
+        { cadera: [100, 79], t: 82, c: 85, tob1: [122, 146], tob2: [78, 138], f1: 10, f2: 300, b1: 235, a1: 300, b2: 305, a2: 40 },
+        { cadera: [100, 76], t: 82, c: 85, tob1: [103, 146], tob2: [84, 112], f1: 0, f2: 280, b1: 262, a1: 350, b2: 278, a2: 5 },
+        { cadera: [100, 79], t: 82, c: 85, tob1: [78, 138], tob2: [122, 146], f1: 300, f2: 10, b1: 305, a1: 40, b2: 235, a2: 300 },
+        { cadera: [100, 76], t: 82, c: 85, tob1: [84, 112], tob2: [103, 146], f1: 280, f2: 0, b1: 278, a1: 5, b2: 262, a2: 350 },
+      ],
+    },
   ];
   CATALOGO.forEach((e) => (e.porDefecto = true));
 
@@ -541,8 +558,8 @@
   function posturaEn(def, ms) {
     const poses = def.poses;
     if (poses.length < 2) return poses[0];
-    const MOV = 900;
-    const PAUSA = 450;
+    const MOV = def.mov || 900;
+    const PAUSA = def.pausa != null ? def.pausa : 450;
     const tramo = MOV + PAUSA;
     if (def.ciclo) {
       const n = poses.length;
@@ -604,7 +621,7 @@
     const anim = { svg, def, inicio: performance.now(), visible: !visor, pausado: reducido() };
     svg._anim = anim;
     pintar(svg, def, def.poses[0]);
-    if (def.poses.length > 1) {
+    if (def.poses.length > 1 && !opciones.estatico) {
       activos.add(anim);
       if (visor) visor.observe(svg);
       if (!bucle) bucle = requestAnimationFrame(tic);

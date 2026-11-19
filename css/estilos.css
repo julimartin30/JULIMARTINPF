@@ -279,3 +279,89 @@ pre.credenciales { white-space: pre-wrap; background: var(--gris); border-radius
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ================= Ficha del atleta, calendarios y evolución ================= */
+.btn-claro { background: rgba(255,255,255,.08); color: #fff; border-color: rgba(255,255,255,.35); }
+.btn-claro:hover { background: rgba(255,255,255,.16); }
+.cabecera-ficha { align-items: center; }
+.atleta-cab { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
+.avatar { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--tinta); color: #fff; font-weight: 800; font-size: 0.9rem; }
+
+/* Sesiones diseñadas */
+.lista-plantillas { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.plantilla { display: grid; gap: 8px; align-content: start; margin: 0; }
+.plantilla h2 { margin: 0; }
+.lista-ej { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.lista-ej li { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; }
+.lista-ej li > span:last-child { display: grid; line-height: 1.2; }
+.lista-ej small { color: var(--tinta-suave); font-weight: 600; }
+.lista-ej .mini .ilustracion { border-radius: 8px; }
+
+/* Calendario mensual */
+.cal-nav { display: flex; align-items: center; gap: 8px; margin: 4px 0 12px; flex-wrap: wrap; }
+.cal-titulo { color: #fff; margin: 0; min-width: 170px; text-align: center; font-size: 1.2rem; }
+.calendario { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-cab { color: #aab3c5; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; text-align: center; padding: 2px 0; }
+.dia { background: #fff; border-radius: 8px; min-height: 92px; padding: 4px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.dia.fuera { opacity: 0.45; }
+.dia.hoy { box-shadow: inset 0 0 0 2px var(--acento); }
+.dia-num { display: flex; justify-content: space-between; align-items: center; width: 100%; font: inherit; font-weight: 800; font-size: 0.85rem; background: none; border: 0; border-radius: 6px; padding: 2px 4px; cursor: pointer; color: var(--tinta); }
+.dia-num:hover { background: var(--gris); }
+.dia-num .mas { color: var(--acento); font-size: 1.05rem; line-height: 1; }
+.dia.hoy .dia-num > span:first-child { color: var(--acento-osc); }
+.chip-sesion { display: block; font-size: 0.74rem; font-weight: 700; line-height: 1.25; padding: 3px 5px; border-radius: 5px; background: var(--gris); color: var(--tinta); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 4px solid #b9c0cc; }
+.chip-sesion:hover { background: #e2e6ee; }
+.tono-borde-ok { border-left-color: #2fa36b; }
+.tono-borde-medio { border-left-color: #e3a21a; }
+.tono-borde-mal { border-left-color: #e0533f; }
+.tono-borde-hoy { border-left-color: var(--acento); }
+.tono-borde-gris { border-left-color: #b9c0cc; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.82rem; font-weight: 600; color: var(--tinta-suave); margin: 4px 0 8px; }
+.leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+.leyenda i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.leyenda-blanca { color: #c7cede; margin-top: 10px; }
+.lista-dia { display: grid; gap: 6px; }
+.fila-dia { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; background: var(--gris); border-radius: 8px; }
+.fila-dia a { font-weight: 700; }
+
+/* Calendario semanal del atleta */
+.semana { display: grid; gap: 10px; }
+.dia-semana { background: rgba(255,255,255,.06); border-radius: var(--radio); padding: 10px; }
+.dia-semana.hoy { background: rgba(232, 87, 42, .16); box-shadow: inset 0 0 0 2px var(--acento); }
+.dia-semana-cab { display: flex; gap: 8px; align-items: center; color: #fff; margin-bottom: 8px; }
+.dia-semana-cab span { color: #c7cede; font-weight: 600; }
+.sesion-semana { display: grid; gap: 4px; background: #fff; border-radius: 10px; padding: 10px 12px; color: var(--tinta); text-decoration: none; box-shadow: var(--sombra); }
+.mini-lista { margin: 0; padding-left: 1.1rem; font-size: 0.9rem; }
+.mini-lista small { color: var(--tinta-suave); font-weight: 600; }
+.descanso { color: #8e97aa; margin: 0; font-style: italic; }
+
+/* Evolución */
+.chips-oscuros .chip-filtro { background: rgba(255,255,255,.08); color: #fff; border-color: rgba(255,255,255,.3); }
+.chips-oscuros .chip-filtro[aria-pressed="true"] { background: #fff; color: var(--tinta); border-color: #fff; }
+.tarjeta-grafica h2 { margin-bottom: 2px; }
+.tarjeta-grafica .fila-sep { align-items: flex-start; margin-bottom: 8px; }
+.grafica { position: relative; width: 100%; touch-action: pan-y; }
+.grafica svg { display: block; font-family: inherit; }
+.tooltip { position: absolute; z-index: 5; pointer-events: none; background: #fff; color: var(--tinta); border: 1px solid var(--linea); border-radius: 8px; padding: 7px 10px; font-size: 0.82rem; box-shadow: 0 6px 18px rgba(0,0,0,.16); min-width: 120px; max-width: 260px; }
+.tt-fila { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.tt-fila i { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.tt-fila b { margin-left: auto; padding-left: 10px; font-variant-numeric: tabular-nums; }
+.tt-total { border-top: 1px solid var(--linea); padding-top: 3px; color: var(--tinta-suave); }
+.tabla-datos summary { font-size: 0.86rem; font-weight: 700; color: var(--tinta-suave); cursor: pointer; margin-top: 8px; }
+.tabla-datos .tabla { font-size: 0.85rem; }
+.vacio-grafica { color: var(--tinta-suave); background: var(--gris); border-radius: 9px; padding: 22px 14px; text-align: center; margin: 4px 0 0; }
+.segmentado-peq { margin: 0; flex: none; }
+.segmentado-peq button { padding: 6px 12px; font-size: 0.86rem; }
+.rejilla-pliegues { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.total-pliegues { font-weight: 800; }
+.serie-at select { min-height: 44px; font-weight: 800; text-align: center; padding: 6px 4px; }
+
+@media (max-width: 560px) {
+  .dia { min-height: 64px; padding: 2px; }
+  .dia-num { font-size: 0.78rem; padding: 2px; }
+  .dia-num .mas { display: none; }
+  .chip-sesion { font-size: 0.64rem; padding: 2px 3px; border-left-width: 3px; }
+  .calendario { gap: 2px; }
+  .lista-plantillas { grid-template-columns: 1fr; }
+  .tarjeta-grafica .fila-sep { flex-direction: column; }
+}

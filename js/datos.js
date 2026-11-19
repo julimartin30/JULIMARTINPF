@@ -219,7 +219,7 @@
     const dek = Cripto.aleatorio(32);
     const { id, llave } = await Cripto.llaveParaUsuario(dek, usuario, password);
     const atleta = { id: U.uid(), nombre, usuario, ruta, dek: Cripto.b64(dek), alta: new Date().toISOString() };
-    const datos = { atleta: { id: atleta.id, nombre, usuario }, entrenador: sesion.datos.entrenador.nombre, github: sesion.datos.github, sesiones: [], registros: {} };
+    const datos = { atleta: { id: atleta.id, nombre, usuario }, entrenador: sesion.datos.entrenador.nombre, github: sesion.datos.github, plantillas: [], sesiones: [], registros: {}, medidas: [] };
     const fichero = await sellar('entreno-atleta', dek, { [id]: llave }, datos);
     await actualizarFichero(
       ruta,
@@ -348,9 +348,15 @@
   /** Cumplimiento de una serie, de 0 a 1. Las repeticiones y el peso cuentan por igual si los dos están pautados. */
   function cumplimientoSerie(obj, real) {
     if (!real) return 0;
+    if (num(obj.km) != null || num(real.km) != null) {
+      const km = num(real.km);
+      if (km == null) return real.hecho ? 1 : 0;
+      return num(obj.km) ? Math.min(1, km / num(obj.km)) : 1;
+    }
     const reps = num(real.reps);
     const kg = num(real.kg);
     if (reps == null && kg == null) return real.hecho ? 1 : 0;
+    if (reps == null && num(obj.reps)) return 0;
     const oR = num(obj.reps);
     const oK = num(obj.kg);
     const fR = oR ? Math.min(1, (reps || 0) / oR) : 1;
@@ -392,7 +398,106 @@
     return { pct: Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length), sesiones: lista.length };
   }
 
+  /* ---------- Fechas y semanas ---------- */
+  const aFecha = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  function sumarDias(f, n) {
+    const d = new Date(f + 'T12:00:00');
+    d.setDate(d.getDate() + n);
+    return aFecha(d);
+  }
+  /** Lunes de la semana de la fecha. */
+  function lunes(f) {
+    const d = new Date((f || hoy()) + 'T12:00:00');
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return aFecha(d);
+  }
+
+  /* ---------- Evolución ---------- */
+  const ZONAS = ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'];
+  const NOMBRES_ZONA = { Z1: 'Z1 · Regenerativo', Z2: 'Z2 · Aeróbico suave', Z3: 'Z3 · Tempo', Z4: 'Z4 · Umbral', Z5: 'Z5 · Máximo' };
+
+  /**
+   * Agrega lo REGISTRADO por el atleta por semanas (lunes) de las últimas `n` semanas.
+   * `grupoDe(item)` devuelve el grupo muscular del ejercicio.
+   * Devuelve { semanas: [lunes], grupos: {grupo: {kg:[], series:[]}}, km: {Z1:[],...}, kmPautados: [] }.
+   */
+  function evolucion(datos, n, grupoDe) {
+    const fin = lunes(hoy());
+    const semanas = Array.from({ length: n }, (_, i) => sumarDias(fin, -7 * (n - 1 - i)));
+    const idx = (f) => semanas.indexOf(lunes(f));
+    const grupos = {};
+    const km = Object.fromEntries(ZONAS.map((z) => [z, semanas.map(() => 0)]));
+    const kmPautados = semanas.map(() => 0);
+    (datos.sesiones || []).forEach((s) => {
+      const w = idx(s.fecha);
+      if (w < 0) return;
+      const reg = (datos.registros || {})[s.id];
+      (s.items || []).forEach((it) => {
+        const r = reg && reg.items && reg.items[it.uid];
+        if (it.tipo === 'km') {
+          (it.series || []).forEach((obj, i) => {
+            kmPautados[w] += num(obj.km) || 0;
+            const real = r && r.series && r.series[i];
+            const k = real && num(real.km);
+            if (k) km[ZONAS.includes(real.zona) ? real.zona : ZONAS.includes(obj.zona) ? obj.zona : 'Z2'][w] += k;
+          });
+          return;
+        }
+        const g = grupoDe(it);
+        const acc = (grupos[g] = grupos[g] || { kg: semanas.map(() => 0), series: semanas.map(() => 0) });
+        ((r && r.series) || []).forEach((real, i) => {
+          if (!real) return;
+          const reps = num(real.reps);
+          const kg = num(real.kg);
+          const hecha = reps != null || kg != null || real.hecho;
+          if (!hecha) return;
+          acc.series[w] += 1;
+          if (it.tipo !== 'seg' && reps && kg) acc.kg[w] += reps * kg;
+          else if (it.tipo !== 'seg' && real.hecho && !reps && it.series[i]) acc.kg[w] += (num(it.series[i].reps) || 0) * (num(it.series[i].kg) || 0);
+        });
+      });
+    });
+    return { semanas, grupos, km, kmPautados };
+  }
+
+  /** Pliegues del protocolo de 6 pliegues (suma en mm). */
+  const PLIEGUES = [
+    ['triceps', 'Tríceps'],
+    ['subescapular', 'Subescapular'],
+    ['supraespinal', 'Supraespinal'],
+    ['abdominal', 'Abdominal'],
+    ['muslo', 'Muslo anterior'],
+    ['pierna', 'Pierna medial'],
+  ];
+  function sumaPliegues(m) {
+    if (!m) return null;
+    if (num(m.suma) != null) return num(m.suma);
+    const v = PLIEGUES.map(([k]) => num(m.pliegues && m.pliegues[k])).filter((x) => x != null);
+    return v.length ? Math.round(v.reduce((a, b) => a + b, 0) * 10) / 10 : null;
+  }
+
+  /** Guarda (o borra, con medida = null) una medición en el fichero del atleta. */
+  async function guardarMedida(ruta, dekRaw, id, medida) {
+    return actualizarCifrado(
+      ruta,
+      dekRaw,
+      (d) => {
+        d.medidas = (d.medidas || []).filter((m) => m.id !== id);
+        if (medida) d.medidas.push({ ...medida, id });
+      },
+      medida ? 'Medición corporal' : 'Medición eliminada'
+    );
+  }
+
   global.Datos = {
+    sumarDias,
+    lunes,
+    ZONAS,
+    NOMBRES_ZONA,
+    evolucion,
+    PLIEGUES,
+    sumaPliegues,
+    guardarMedida,
     RUTA_ENTRENADOR,
     ls,
     usarGitHub,
