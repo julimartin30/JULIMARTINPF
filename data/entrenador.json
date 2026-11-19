@@ -1,0 +1,17 @@
+{
+ "formato": "entreno-entrenador",
+ "version": 1,
+ "actualizado": "2026-11-19T12:59:53.146Z",
+ "llaves": {
+  "62bfb73daa4cda403ade4ffa46b1a957f251c8790da6b3d0a245961b86076cac": {
+   "sal": "Nr/VfqtVCzGqgJas/rXKNA==",
+   "iter": 310000,
+   "iv": "PX0CDTDhklLQSDW+",
+   "ct": "+p5cTsMt3Ud1J/gKQfi7hhRi6LPEAR9jXLXuHNw22allLO6UqXLYQbo171CXeg0A"
+  }
+ },
+ "datos": {
+  "iv": "ZPVFCz4kg07K14l7",
+  "ct": "kayboMEgfi5I7QtnWQJN+Iu6WWbj4dHHYa8n1eNw5taky2H57E81HXlrBUickTzX0NOXDd8zCdGEkE/S+DntwGDSCYIz7fOCL4jM8nGxOu4vqtpDmjFBuI/QPFuKdWaMg5celJaMRwb2kgSRKG7H0M5Sfvp8DvrLJesVUOkepCcXrcikfTGq0fCEAJACpm62ruZb2sxN7Gqjv3/lxMdBL+8xL3lF39kDgDv9jpy/jHSTQdLzeNEhBnMHZfNk/puzPA9SCuIYhhmDlzklU8+JdL27hD8O7g/kQurdsXRjzLvEQrfihTr5XiBfSVaR7RixuFr9u2T7wb+uTZgnkw6FU3y+sSRtNQu2xMBtNH8w4lu/Q3jzumv5KtPmgP5xPuToL3gUv1Xuy90XBptI8UPTBIcR0pKqHLvMFwX/JuEiSZo+Lh5WNWpJLftI39GTBnLaWsJQlNEybXrF8Av2VWo4AJ93jmM="
+ }
+}
