@@ -1611,7 +1611,7 @@
                 el('b', s.titulo || 'Sesión'),
                 chipEstado(cs),
                 cs.pct != null && cs.estado !== 'pendiente' && cs.estado !== 'hoy' ? barra(cs.pct) : null,
-                el('ul.mini-lista', s.items.map((it) => el('li', defItem(it).nombre, el('small', textoObjetivo(it)))))
+                el('ul.mini-lista', s.items.map((it) => el('li', defItem(it).nombre)))
               );
             })
           : el('p.descanso', 'Descanso')

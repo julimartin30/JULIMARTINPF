@@ -1,5 +1,5 @@
 /* Permite abrir la app sin cobertura (tras haberla abierto una vez con conexión). */
-const CACHE = 'entreno-v3';
+const CACHE = 'entreno-v4';
 const BASE = [
   './',
   'index.html',
