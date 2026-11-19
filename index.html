@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#1d2433">
+  <title>Entreno</title>
+  <link rel="icon" href="assets/icono.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+  <header class="barra">
+    <a class="marca" href="#/"><img src="assets/icono.svg" alt="" width="34" height="34"><b>Entreno</b></a>
+    <div class="espacio"></div>
+    <div class="barra-usuario" id="barra-usuario"></div>
+  </header>
+  <main id="app"></main>
+
+  <script src="js/cripto.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/github.js"></script>
+  <script src="js/figuras.js"></script>
+  <script src="js/datos.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

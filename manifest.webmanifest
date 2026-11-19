@@ -1,0 +1,12 @@
+{
+  "name": "Entreno · Planificación deportiva",
+  "short_name": "Entreno",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#1d2433",
+  "theme_color": "#1d2433",
+  "lang": "es",
+  "icons": [
+    { "src": "assets/icono.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
