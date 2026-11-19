@@ -324,13 +324,6 @@ pre.credenciales { white-space: pre-wrap; background: var(--gris); border-radius
 .fila-dia { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; background: var(--gris); border-radius: 8px; }
 .fila-dia a { font-weight: 700; }
 
-/* Calendario semanal del atleta */
-.semana { display: grid; gap: 10px; }
-.dia-semana { background: rgba(255,255,255,.06); border-radius: var(--radio); padding: 10px; }
-.dia-semana.hoy { background: rgba(232, 87, 42, .16); box-shadow: inset 0 0 0 2px var(--acento); }
-.dia-semana-cab { display: flex; gap: 8px; align-items: center; color: #fff; margin-bottom: 8px; }
-.dia-semana-cab span { color: #c7cede; font-weight: 600; }
-.sesion-semana { display: grid; gap: 4px; background: #fff; border-radius: 10px; padding: 10px 12px; color: var(--tinta); text-decoration: none; box-shadow: var(--sombra); }
 .mini-lista { margin: 0; padding-left: 1.1rem; font-size: 0.9rem; }
 .mini-lista small { color: var(--tinta-suave); font-weight: 600; }
 .descanso { color: #8e97aa; margin: 0; font-style: italic; }
@@ -364,4 +357,34 @@ pre.credenciales { white-space: pre-wrap; background: var(--gris); border-radius
   .calendario { gap: 2px; }
   .lista-plantillas { grid-template-columns: 1fr; }
   .tarjeta-grafica .fila-sep { flex-direction: column; }
+}
+
+/* Atleta: acceso rápido y microciclo */
+.hoy-rapido { display: grid; gap: 10px; }
+.hoy-rapido .fila-botones { margin-top: 6px; }
+.acceso-sesion { display: inline-flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: var(--gris); color: var(--tinta); text-decoration: none; border-left: 4px solid var(--acento); }
+.acceso-sesion:hover { background: #e2e6ee; }
+.microciclo { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 1fr); gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 2px 14px; overscroll-behavior-x: contain; }
+.tarjeta-dia { scroll-snap-align: start; display: flex; flex-direction: column; gap: 8px; background: #fff; border-radius: var(--radio); padding: 10px; min-height: 260px; box-shadow: var(--sombra); }
+.tarjeta-dia.libre { background: rgba(255,255,255,.07); box-shadow: none; }
+.tarjeta-dia.libre .tarjeta-dia-cab { color: #c7cede; }
+.tarjeta-dia.hoy { box-shadow: 0 0 0 3px var(--acento), var(--sombra); }
+.tarjeta-dia-cab { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 6px; color: var(--tinta); }
+.dia-nombre { font-weight: 800; }
+.dia-fecha { grid-column: 1 / -1; font-size: 1.7rem; font-weight: 900; line-height: 1.05; }
+.dia-mes { font-size: 0.95rem; font-weight: 700; color: var(--tinta-suave); }
+.tarjeta-dia.libre .dia-mes { color: #aab3c5; }
+.sesion-dia { display: grid; gap: 5px; align-content: start; padding: 8px; border-radius: 9px; background: var(--gris); color: var(--tinta); text-decoration: none; }
+.sesion-dia:hover { background: #e2e6ee; }
+.sesion-dia .chip { justify-self: start; }
+.sesion-dia .medidor { margin: 0; height: 8px; }
+.sesion-dia .mini-lista { padding-left: 1rem; font-size: 0.84rem; }
+.sesion-dia .mini-lista small { display: block; }
+.tarjeta-dia .descanso { margin: auto 0; text-align: center; }
+@media (min-width: 1000px) {
+  /* En pantallas grandes la semana entera cabe: la fila sale del ancho del contenido */
+  .microciclo { grid-auto-flow: row; grid-template-columns: repeat(7, minmax(0, 1fr)); overflow: visible; width: min(1360px, calc(100vw - 48px)); position: relative; left: 50%; transform: translateX(-50%); }
+}
+@media (max-width: 560px) {
+  .microciclo { grid-auto-columns: 72%; }
 }

@@ -7,8 +7,8 @@ App web (instalable en el móvil) para que un entrenador planifique las sesiones
   - **Planificación:** calendario mensual. Pulsando un día se añaden una o varias de las sesiones diseñadas (y se pueden repetir varias semanas). Cada sesión aparece en el día con un color según lo que ha cumplido el atleta; al pulsarla se ve serie a serie lo pautado frente a lo realizado.
   - **Evolución:** las mismas gráficas que ve el atleta.
 - **Atleta:** tres pestañas:
-  - **Hoy:** la sesión del día, las que tiene sin terminar y las próximas. En cada ejercicio anota lo que ha hecho (si una serie la ha hecho tal cual, basta con pulsar ✓).
-  - **Calendario:** la planificación semana a semana.
+  - **Calendario** (se abre al entrar): vista mensual con toda su preparación. Arriba, acceso directo a la sesión de hoy y a las que tenga sin registrar de la semana. Pulsando una sesión ve los ejercicios y anota lo que ha hecho (si una serie la ha hecho tal cual, basta con pulsar ✓).
+  - **Microciclo:** la semana en horizontal, un día por tarjeta, con sus sesiones, ejercicios y estado. En el móvil se desliza de lado y empieza en el día de hoy.
   - **Evolución:** gráficas de peso corporal, volumen de entrenamiento por grupo muscular (kilos o series por semana), kilómetros por semana según su intensidad (zonas Z1–Z5) y suma de 6 pliegues cutáneos. El atleta y el entrenador pueden añadir mediciones de peso y pliegues.
 - **Cada ejercicio lleva una ilustración animada** que muestra el movimiento, además de los pasos para hacerlo y los errores a evitar. Hay 24 ejercicios de serie (incluida la carrera, que se mide en kilómetros y zona) y el entrenador puede crear los suyos (reutilizando un dibujo, con una foto o con un enlace a vídeo).
 

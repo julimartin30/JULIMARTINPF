@@ -363,10 +363,10 @@
       }
       const [vista, x] = partes;
       if (vista === 's' && x) return vistaSesionAtleta(x);
-      if (vista === 'calendario') return await vistaCalendarioAtleta(x);
+      if (vista === 'microciclo') return await vistaMicrociclo(x);
       if (vista === 'evolucion') return await vistaEvolucionAtleta();
       if (vista === 'cuenta') return vistaCuentaAtleta();
-      return await vistaInicioAtleta();
+      return await vistaCalendarioAtleta(vista === 'calendario' ? x : null);
     } catch (e) {
       console.error(e);
       app.replaceChildren(el('div.tarjeta', el('h2', 'No se ha podido cargar'), el('p', errorTexto(e)), el('button.btn', { type: 'button', onclick: render }, 'Reintentar')));
@@ -736,66 +736,79 @@
   /* --- Pestaña Planificación: calendario mensual --- */
   const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
-  function pintarPlanificacion(contenido, a, d, mesArg) {
+  /**
+   * Calendario mensual (lo usan el entrenador y el atleta).
+   * op.hrefMes(mes), op.hrefSesion(s), op.alPulsarDia(fecha), op.etiquetaDia(fecha, n)
+   */
+  function calendarioMes(d, mes, op) {
     const h = Datos.hoy();
-    const mes = /^\d{4}-\d{2}$/.test(mesArg || '') ? mesArg : h.slice(0, 7);
     const [Y, M] = mes.split('-').map(Number);
-    const primero = `${mes}-01`;
-    const inicio = Datos.lunes(primero);
     const otroMes = (delta) => {
       const dd = new Date(Y, M - 1 + delta, 1);
       return `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, '0')}`;
     };
     const porDia = {};
-    d.sesiones.forEach((s) => (porDia[s.fecha] = porDia[s.fecha] || []).push(s));
+    (d.sesiones || []).forEach((s) => (porDia[s.fecha] = porDia[s.fecha] || []).push(s));
     const celdas = [];
-    let f = inicio;
+    let f = Datos.lunes(`${mes}-01`);
     do {
       for (let i = 0; i < 7; i++) {
         const fecha = f;
-        const delMes = fecha.slice(0, 7) === mes;
         const ses = (porDia[fecha] || []).slice().sort((x, y) => (x.titulo || '').localeCompare(y.titulo || ''));
         celdas.push(
           el(
-            'div.dia' + (delMes ? '' : '.fuera') + (fecha === h ? '.hoy' : ''),
+            'div.dia' + (fecha.slice(0, 7) === mes ? '' : '.fuera') + (fecha === h ? '.hoy' : ''),
             { role: 'gridcell' },
             el(
               'button.dia-num',
-              { type: 'button', 'aria-label': `${fechaBonita(fecha)}: ${ses.length ? ses.length + ' sesiones' : 'sin sesiones'}. Añadir o ver`, onclick: () => dialogoDia(a, fecha) },
+              { type: 'button', 'aria-label': op.etiquetaDia(fecha, ses.length), onclick: () => op.alPulsarDia(fecha) },
               el('span', +fecha.slice(8)),
-              el('span.mas', { 'aria-hidden': 'true' }, '+')
+              op.mas && el('span.mas', { 'aria-hidden': 'true' }, '+')
             ),
             ses.map((s) => {
               const cs = Datos.cumplimientoSesion(s, d.registros[s.id]);
-              return el('a.chip-sesion.tono-borde-' + (cs.estado === 'completada' ? colorPct(cs.pct) : ESTADOS[cs.estado][1]), { href: `#/atleta/${a.id}/sesion/${s.id}`, title: `${s.titulo || 'Sesión'} · ${ESTADOS[cs.estado][0]}` }, s.titulo || 'Sesión');
+              return el(
+                'a.chip-sesion.tono-borde-' + (cs.estado === 'completada' ? colorPct(cs.pct) : ESTADOS[cs.estado][1]),
+                { href: op.hrefSesion(s), title: `${s.titulo || 'Sesión'} · ${ESTADOS[cs.estado][0]}`, onclick: op.alPulsarSesion },
+                s.titulo || 'Sesión'
+              );
             })
           )
         );
         f = Datos.sumarDias(f, 1);
       }
     } while (f.slice(0, 7) === mes);
-
-    contenido.replaceChildren(
+    return [
       el(
         'div.cal-nav',
-        el('a.btn.btn-peq.btn-claro', { href: `#/atleta/${a.id}/plan/${otroMes(-1)}`, 'aria-label': 'Mes anterior' }, '‹'),
+        el('a.btn.btn-peq.btn-claro', { href: op.hrefMes(otroMes(-1)), 'aria-label': 'Mes anterior' }, '‹'),
         el('h2.cal-titulo', `${MESES[M - 1]} ${Y}`.replace(/^./, (c) => c.toUpperCase())),
-        el('a.btn.btn-peq.btn-claro', { href: `#/atleta/${a.id}/plan/${otroMes(1)}`, 'aria-label': 'Mes siguiente' }, '›'),
-        mes !== h.slice(0, 7) && el('a.btn.btn-peq.btn-claro', { href: `#/atleta/${a.id}/plan/${h.slice(0, 7)}` }, 'Hoy')
+        el('a.btn.btn-peq.btn-claro', { href: op.hrefMes(otroMes(1)), 'aria-label': 'Mes siguiente' }, '›'),
+        mes !== h.slice(0, 7) && el('a.btn.btn-peq.btn-claro', { href: op.hrefMes(h.slice(0, 7)) }, 'Hoy')
       ),
-      el(
-        'div.calendario',
-        { role: 'grid', 'aria-label': 'Calendario de ' + a.nombre },
-        ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((x) => el('div.cal-cab', { role: 'columnheader' }, x)),
-        celdas
-      ),
+      el('div.calendario', { role: 'grid', 'aria-label': op.titulo }, ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((x) => el('div.cal-cab', { role: 'columnheader' }, x)), celdas),
       el(
         'div.leyenda.leyenda-blanca',
         el('span', el('i.tono-gris'), 'Pendiente'),
+        el('span', el('i', { style: 'background:var(--acento)' }), 'Hoy'),
         el('span', el('i.tono-medio'), 'A medias'),
         el('span', el('i.tono-ok'), 'Cumplida ≥90%'),
         el('span', el('i.tono-mal'), 'No hecha / <60%')
       ),
+    ];
+  }
+  const mesValido = (m) => (/^\d{4}-\d{2}$/.test(m || '') ? m : Datos.hoy().slice(0, 7));
+
+  function pintarPlanificacion(contenido, a, d, mesArg) {
+    contenido.replaceChildren(
+      ...calendarioMes(d, mesValido(mesArg), {
+        titulo: 'Calendario de ' + a.nombre,
+        mas: true,
+        hrefMes: (m) => `#/atleta/${a.id}/plan/${m}`,
+        hrefSesion: (s) => `#/atleta/${a.id}/sesion/${s.id}`,
+        alPulsarDia: (fecha) => dialogoDia(a, fecha),
+        etiquetaDia: (fecha, n) => `${fechaBonita(fecha)}: ${n ? n + ' sesiones' : 'sin sesiones'}. Añadir o ver`,
+      }),
       d.plantillas.length ? el('p.ayuda-blanca', 'Pulsa el número de un día para añadir sesiones diseñadas. Pulsa una sesión para ver lo que ha registrado el atleta.') : el('div.nota.nota-alerta', 'Primero diseña alguna sesión en la pestaña «Sesiones».')
     );
   }
@@ -1514,8 +1527,8 @@
   const pestanasAtleta = (activa) =>
     pestanas(
       [
-        ['#/', 'Hoy', 'hoy'],
-        ['#/calendario', 'Calendario', 'calendario'],
+        ['#/', 'Calendario', 'calendario'],
+        ['#/microciclo', 'Microciclo', 'microciclo'],
         ['#/evolucion', 'Evolución', 'evolucion'],
       ],
       activa
@@ -1527,48 +1540,49 @@
     return S.sesion.datos;
   }
 
-  function filaSesionAtleta(d, s) {
-    const cs = Datos.cumplimientoSesion(s, d.registros[s.id]);
-    return el(
-      'a.fila-sesion' + (s.fecha === Datos.hoy() ? '.es-hoy' : ''),
-      { href: '#/s/' + s.id, onclick: () => (S.volverAtleta = location.hash || '#/') },
-      el('div', el('b', s.titulo || 'Sesión'), el('span.meta', `${fechaBonita(s.fecha)} · ${s.items.map((it) => defItem(it).nombre).slice(0, 3).join(', ')}${s.items.length > 3 ? '…' : ''}`)),
-      el('div.fila-sesion-der', chipEstado(cs))
-    );
-  }
-
-  async function vistaInicioAtleta() {
+  /* --- Calendario: vista mensual (pantalla de inicio del atleta) --- */
+  async function vistaCalendarioAtleta(mesArg) {
     cargando();
     const d = await refrescarAtleta();
     const h = Datos.hoy();
-    const ses = (d.sesiones || []).slice().sort((x, y) => x.fecha.localeCompare(y.fecha));
-    const deHoy = ses.filter((s) => s.fecha === h);
-    const proximas = ses.filter((s) => s.fecha > h).slice(0, 3);
-    const pendientesAtras = ses.filter((s) => s.fecha < h && s.fecha >= Datos.sumarDias(h, -14) && !(d.registros[s.id] && d.registros[s.id].completada)).reverse();
+    const mes = mesValido(mesArg);
+    const deHoy = (d.sesiones || []).filter((s) => s.fecha === h);
+    const sinTerminar = (d.sesiones || []).filter((s) => s.fecha < h && s.fecha >= Datos.sumarDias(h, -7) && !Datos.cumplimientoSesion(s, d.registros[s.id]).hechas);
     const c = Datos.cumplimientoPeriodo(d);
+    const boton = (s) => {
+      const cs = Datos.cumplimientoSesion(s, d.registros[s.id]);
+      return el('a.acceso-sesion', { href: '#/s/' + s.id, onclick: () => (S.volverAtleta = location.hash || '#/') }, el('b', s.titulo || 'Sesión'), chipEstado(cs));
+    };
     app.replaceChildren(
-      pestanasAtleta('hoy'),
+      pestanasAtleta('calendario'),
       avisoModo() || '',
-      el('h1.titulo-blanco', 'Hola, ' + d.atleta.nombre.split(' ')[0]),
       el(
-        'div.tarjeta.resumen',
-        el('div.fila-sep', el('b', 'Tu cumplimiento (4 semanas)'), el('span.pct.tono-' + colorPct(c.pct), c.pct == null ? '—' : c.pct + '%')),
-        barra(c.pct),
-        el('p.ayuda', d.entrenador ? 'Planificación de ' + d.entrenador : '')
+        'div.cabecera',
+        el('h1', 'Hola, ' + d.atleta.nombre.split(' ')[0]),
+        el('span.ayuda-blanca', c.pct == null ? '' : `Cumplimiento últimas 4 semanas: ${c.pct}%`)
       ),
-      el('h2.titulo-seccion', 'Hoy'),
-      deHoy.length ? el('div.lista', deHoy.map((s) => filaSesionAtleta(d, s))) : el('p.vacio-blanco', 'Hoy no tienes sesión. ¡Descansa!'),
-      pendientesAtras.length > 0 && el('h2.titulo-seccion', 'Sin terminar (últimas 2 semanas)'),
-      pendientesAtras.length > 0 && el('div.lista', pendientesAtras.map((s) => filaSesionAtleta(d, s))),
-      el('h2.titulo-seccion', 'Próximas'),
-      proximas.length ? el('div.lista', proximas.map((s) => filaSesionAtleta(d, s))) : el('p.vacio-blanco', 'No hay más sesiones programadas.'),
-      el('p', el('a.enlace-blanco', { href: '#/calendario' }, 'Ver el calendario completo →')),
+      deHoy.length || sinTerminar.length
+        ? el(
+            'div.tarjeta.hoy-rapido',
+            deHoy.length > 0 && el('div', el('b', 'Hoy'), el('div.fila-botones', deHoy.map(boton))),
+            sinTerminar.length > 0 && el('div', el('b', 'Sin registrar esta semana'), el('div.fila-botones', sinTerminar.map(boton)))
+          )
+        : '',
+      ...calendarioMes(d, mes, {
+        titulo: 'Tu preparación',
+        hrefMes: (m) => '#/calendario/' + m,
+        hrefSesion: (s) => '#/s/' + s.id,
+        alPulsarSesion: () => (S.volverAtleta = location.hash || '#/'),
+        alPulsarDia: (fecha) => ir('#/microciclo/' + fecha),
+        etiquetaDia: (fecha, n) => `${fechaBonita(fecha)}: ${n ? n + ' sesiones' : 'descanso'}. Ver su semana`,
+      }),
+      el('p.ayuda-blanca', 'Pulsa una sesión para ver los ejercicios y registrar lo que has hecho. Pulsa el número de un día para ver esa semana.'),
       el('p', el('a.enlace-blanco', { href: '#/cuenta' }, 'Mi cuenta'))
     );
   }
 
-  /* --- Calendario semana a semana --- */
-  async function vistaCalendarioAtleta(arg) {
+  /* --- Microciclo: la semana en horizontal, un día por tarjeta --- */
+  async function vistaMicrociclo(arg) {
     cargando();
     const d = await refrescarAtleta();
     const h = Datos.hoy();
@@ -1580,43 +1594,46 @@
     const [, m1, d1] = lun.split('-');
     const [, m2, d2] = dom.split('-');
     const titulo = m1 === m2 ? `${+d1}–${+d2} de ${MESES[+m1 - 1]}` : `${+d1} ${MESES[+m1 - 1].slice(0, 3)} – ${+d2} ${MESES[+m2 - 1].slice(0, 3)}`;
-    const dias = Array.from({ length: 7 }, (_, i) => {
+    const tarjetas = Array.from({ length: 7 }, (_, i) => {
       const f = Datos.sumarDias(lun, i);
       const delDia = ses.filter((s) => s.fecha === f);
       const nombre = DIAS[(i + 1) % 7];
       return el(
-        'section.dia-semana' + (f === h ? '.hoy' : ''),
-        { 'aria-label': `${nombre} ${fechaCorta(f)}` },
-        el('div.dia-semana-cab', el('b', nombre.replace(/^./, (c) => c.toUpperCase())), el('span', +f.slice(8) + ' ' + MESES[+f.slice(5, 7) - 1].slice(0, 3)), f === h && el('span.chip.chip-hoy', 'Hoy')),
+        'section.tarjeta-dia' + (f === h ? '.hoy' : '') + (delDia.length ? '' : '.libre'),
+        { 'aria-label': `${nombre} ${fechaCorta(f)}`, id: f === h ? 'dia-hoy' : null },
+        el('div.tarjeta-dia-cab', el('span.dia-nombre', nombre.replace(/^./, (c) => c.toUpperCase())), f === h && el('span.chip.chip-hoy', 'Hoy'), el('span.dia-fecha', +f.slice(8), el('small.dia-mes', ' ' + MESES[+f.slice(5, 7) - 1].slice(0, 3)))),
         delDia.length
-          ? el(
-              'div.lista',
-              delDia.map((s) => {
-                const cs = Datos.cumplimientoSesion(s, d.registros[s.id]);
-                return el(
-                  'a.sesion-semana',
-                  { href: '#/s/' + s.id, onclick: () => (S.volverAtleta = location.hash) },
-                  el('div.fila-sep', el('b', s.titulo || 'Sesión'), chipEstado(cs)),
-                  el('ul.mini-lista', s.items.map((it) => el('li', defItem(it).nombre, el('small', ' · ' + textoObjetivo(it)))))
-                );
-              })
-            )
+          ? delDia.map((s) => {
+              const cs = Datos.cumplimientoSesion(s, d.registros[s.id]);
+              return el(
+                'a.sesion-dia',
+                { href: '#/s/' + s.id, onclick: () => (S.volverAtleta = location.hash) },
+                el('b', s.titulo || 'Sesión'),
+                chipEstado(cs),
+                cs.pct != null && cs.estado !== 'pendiente' && cs.estado !== 'hoy' ? barra(cs.pct) : null,
+                el('ul.mini-lista', s.items.map((it) => el('li', defItem(it).nombre, el('small', textoObjetivo(it)))))
+              );
+            })
           : el('p.descanso', 'Descanso')
       );
     });
+    const fila = el('div.microciclo', tarjetas);
     app.replaceChildren(
-      pestanasAtleta('calendario'),
+      pestanasAtleta('microciclo'),
       avisoModo() || '',
       el(
         'div.cal-nav',
-        el('a.btn.btn-peq.btn-claro', { href: '#/calendario/' + Datos.sumarDias(lun, -7), 'aria-label': 'Semana anterior' }, '‹'),
+        el('a.btn.btn-peq.btn-claro', { href: '#/microciclo/' + Datos.sumarDias(lun, -7), 'aria-label': 'Semana anterior' }, '‹'),
         el('h2.cal-titulo', titulo),
-        el('a.btn.btn-peq.btn-claro', { href: '#/calendario/' + Datos.sumarDias(lun, 7), 'aria-label': 'Semana siguiente' }, '›'),
-        lun !== Datos.lunes(h) && el('a.btn.btn-peq.btn-claro', { href: '#/calendario' }, 'Esta semana')
+        el('a.btn.btn-peq.btn-claro', { href: '#/microciclo/' + Datos.sumarDias(lun, 7), 'aria-label': 'Semana siguiente' }, '›'),
+        lun !== Datos.lunes(h) && el('a.btn.btn-peq.btn-claro', { href: '#/microciclo' }, 'Esta semana')
       ),
       el('p.ayuda-blanca', ses.length ? `${ses.length} sesiones · ${hechas} terminadas${kmPaut ? ` · ${Graficas.fmt(kmPaut, 1)} km previstos` : ''}` : 'Sin sesiones esta semana.'),
-      el('div.semana', dias)
+      fila
     );
+    // En el móvil, la fila arranca en el día de hoy
+    const hoyEl = $('#dia-hoy', fila);
+    if (hoyEl) requestAnimationFrame(() => (fila.scrollLeft = Math.max(0, hoyEl.offsetLeft - fila.offsetLeft - 8)));
   }
 
   async function vistaEvolucionAtleta() {
@@ -1637,6 +1654,7 @@
   function vistaCuentaAtleta() {
     app.replaceChildren(
       pestanasAtleta(''),
+      el('a.volver', { href: '#/' }, '← Calendario'),
       el('h1.titulo-blanco', 'Mi cuenta'),
       el('div.tarjeta', el('p', el('b', 'Usuario: '), S.sesion.datos.atleta.usuario), el('button.btn', { type: 'button', onclick: () => cambiarMiPassword() }, 'Cambiar contraseña'))
     );
