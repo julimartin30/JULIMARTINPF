@@ -1,0 +1,17 @@
+{
+ "formato": "entreno-atleta",
+ "version": 1,
+ "actualizado": "2026-11-19T13:01:56.557Z",
+ "llaves": {
+  "d9db30bc7cf6a3048484d144d4d691e116a6ab4a62aa798dce0d01f04d35cef0": {
+   "sal": "i5iQ/w0p8ukvtgS341L8xQ==",
+   "iter": 310000,
+   "iv": "orAuylnp1fjx+Bkr",
+   "ct": "6iBr5wlN/UrLt4YdQ1IOIs7O9asnOXRqZ79tm6AN4ku4thiasTmfWpHBVdzrCJc0"
+  }
+ },
+ "datos": {
+  "iv": "NQSiyQhD4seNIidb",
+  "ct": "ZDUcjG15Ob7VWvcOR9Hj+9ujWwWf9e3p3Vr6QjerNGZvOrKKzK5wrvRTipZV850kR4Jj1EY8daVLqZSMGqIdkr1pEkGmwdAk2LZ0B4GHUcQp9U718lfB+SXP1PKVezgcH7kn6KEf3RfqHcTrSBDuYeCmkfvYOW1tit5mE1qx3DIb0MJjwl6rIFFmHKdgnJxX/c0iUCzRf+xh1S9EJkR2c+TYmyycl2f/8ijWT54UsqakBIjAkrLDk3S/jdKITsCTDksjtgc/36G24G7bMuVtMSOIqOSQ60zMhVbJGrMdokEn2haow11Zasw3OcQZGwAAGzN/mqmDK/oplyN38eLFHuBvv2JSmRjFG/gVaEdaEd+D4bWnBXxf0vAwynlygLnBkxqrrTV9jdMYftZ4u7iyg3VGvnab/m0PJUw10P7bcvgX8Jtt2ItxYumMJMiEaDlfTHvRWnp9TlBKrPl442veHpbzDH4j8C46Kty4dGEiPhMzsR9vOzTp2V1Oqoynppd7oKqNOQeX9v8/8yu+jMoDofyp+mDLMzc8UWhEpFXKbwSgHTon6aAvDx9MZ7dzFt73pjW5138ugBmBCxxTUIiPzUSNPUENNZOvoTXpqjRLDHpRiGp5HabkrD8k+KnCPTeAteOjdos8bge7+BWBOYORc+RjKlnHCTfJYbR5EAphSL/ovzHJazpmc/MMzQUZKladMRKFJX3tqeLlUTPQ9b4qKrEkB4qgXoz/YvySTXJMONFkGJCtGhmfZeXvkrHpy1TCARmZ0I8VmAKA3OKCXS64TBiC9+HCrhphzsdJ5iKPXNTG2NeB2WxbYWlBbM34ar/aZaEhbTIe7XCQOnFqrLdE/xKBb8kQP+Yc9pHwOmFzHKNpRmATMEmkrFIo31AkUFYHUb+IB0FJQqBYnd0/rGFMmFhxRdrUkRn1JTKUIoWQtad2t+y4KaR1DK42/JOyGgWUtp1q8fuD+HV7uw5g7g+wDXhmmhMdR0p7fSDYATSaWaunJc5WngC7ax3Rydat1Ikdw0KSlWtqFennKbe1UAVORa10THBPMwhj5gYBFpbVIkMbQEeNaltGyZCZJtZi2ojkNLxloN0+X/cyuWRx7hsqyqFpVh5Qx7ZaLggRhzobH1C+CNfNv8sBIwQ9nbkUHR0iqfkUGF3qaRPbA0mzEqqLnSC+IKlMxMhlGMuUdyUhrPm3WY2Ppw2k+0zLHJKrlKcpqhgkHgYmXBxVUjPrgqedQVoZLpTW2kf9/8m1ZuR4E1uKP2Y="
+ }
+}
