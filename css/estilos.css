@@ -450,3 +450,16 @@ pre.credenciales { white-space: pre-wrap; background: var(--gris); border-radius
 .rueda-ayuda { font-size: 0.82rem; color: var(--tinta-suave); text-align: center; margin: 0; }
 .rueda-botones { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 .rueda-botones .btn { min-width: 64px; }
+
+/* Resumen de hoy (calendario del atleta) */
+.hoy-rapido h2 { margin: 0; }
+.hoy-etq { display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--tinta-suave); margin-bottom: 4px; }
+.hoy-fila { display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 10px; background: var(--gris); color: var(--tinta); text-decoration: none; }
+.hoy-fila:hover { background: #e2e6ee; }
+.hoy-icono { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: #fff; font-size: 1.1rem; }
+.hoy-texto { display: grid; gap: 1px; min-width: 0; }
+.hoy-texto small { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--tinta-suave); }
+.hoy-texto b { font-size: 1rem; }
+.hoy-progreso { font-size: 0.84rem; color: var(--tinta-suave); }
+.hoy-texto .medidor { margin: 4px 0 0; height: 7px; }
+.hoy-flecha { font-size: 1.5rem; color: var(--tinta-suave); }

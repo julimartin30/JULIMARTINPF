@@ -2033,6 +2033,53 @@
   }
 
   /* --- Calendario: vista mensual (pantalla de inicio del atleta) --- */
+  /** Resumen de hoy: sesión(es), pauta de alimentación y pauta de pasos (con lo ya registrado). */
+  function tarjetaHoyAtleta(d, deHoy, sinTerminar, boton) {
+    const h = Datos.hoy();
+    const obj = d.objetivos || {};
+    const nut = Datos.objetivoEn(obj.nutricion, h);
+    const pas = Datos.objetivoEn(obj.pasos, h);
+    const reg = (d.diario || {})[h] || {};
+    if (!deHoy.length && !sinTerminar.length && !nut && !pas) return '';
+    const fila = (icono, titulo, contenido, href, extra) =>
+      el(
+        'a.hoy-fila',
+        { href },
+        el('span.hoy-icono', { 'aria-hidden': 'true' }, icono),
+        el('span.hoy-texto', el('small', titulo), el('b', contenido), extra || ''),
+        el('span.hoy-flecha', { 'aria-hidden': 'true' }, '›')
+      );
+    const kcalHoy = Datos.num(reg.kcal);
+    const pasosHoy = Datos.num(reg.pasos);
+    const ABREV = { prot: 'P', hc: 'HC', grasa: 'G' };
+    const macros = nut ? MACROS.filter(([k]) => Datos.num(nut[k]) != null).map(([k]) => `${ABREV[k]} ${fmt0(nut[k])} g`) : [];
+    return el(
+      'section.tarjeta.hoy-rapido',
+      { 'aria-label': 'Resumen de hoy' },
+      el('h2', `Hoy, ${DIAS[new Date(h + 'T12:00:00').getDay()]} ${+h.slice(8)} de ${MESES[+h.slice(5, 7) - 1]}`),
+      deHoy.length > 0 ? el('div', el('small.hoy-etq', 'Entrenamiento'), el('div.fila-botones', deHoy.map(boton))) : el('p.meta', 'Hoy no tienes entrenamiento. ¡Descansa!'),
+      nut &&
+        fila(
+          '🍽',
+          'Alimentación',
+          `${fmt0(nut.kcal)} kcal` + (macros.length ? ` · ${macros.join(' · ')}` : ''),
+          '#/alimentacion',
+          kcalHoy != null ? el('span.hoy-progreso', `Llevas ${fmt0(kcalHoy)} kcal (${Math.round((kcalHoy * 100) / nut.kcal)}%)`) : el('span.hoy-progreso', 'Sin registrar todavía')
+        ),
+      pas &&
+        fila(
+          '👟',
+          'Pasos',
+          `${fmt0(pas.pasos)} pasos`,
+          '#/pasos',
+          pasosHoy != null
+            ? [el('span.hoy-progreso', `Llevas ${fmt0(pasosHoy)} (${Math.round((pasosHoy * 100) / pas.pasos)}%)`), barra(Math.min(100, Math.round((pasosHoy * 100) / pas.pasos)), 'Pasos de hoy')]
+            : el('span.hoy-progreso', 'Sin registrar todavía')
+        ),
+      sinTerminar.length > 0 && el('div', el('small.hoy-etq', 'Sin registrar esta semana'), el('div.fila-botones', sinTerminar.map(boton)))
+    );
+  }
+
   async function vistaCalendarioAtleta(mesArg) {
     cargando();
     const d = await refrescarAtleta();
@@ -2053,13 +2100,7 @@
         el('h1', 'Hola, ' + d.atleta.nombre.split(' ')[0]),
         el('span.ayuda-blanca', c.pct == null ? '' : `Cumplimiento últimas 4 semanas: ${c.pct}%`)
       ),
-      deHoy.length || sinTerminar.length
-        ? el(
-            'div.tarjeta.hoy-rapido',
-            deHoy.length > 0 && el('div', el('b', 'Hoy'), el('div.fila-botones', deHoy.map(boton))),
-            sinTerminar.length > 0 && el('div', el('b', 'Sin registrar esta semana'), el('div.fila-botones', sinTerminar.map(boton)))
-          )
-        : '',
+      tarjetaHoyAtleta(d, deHoy, sinTerminar, boton),
       ...calendarioMes(d, mes, {
         titulo: 'Tu preparación',
         hrefMes: (m) => '#/calendario/' + m,

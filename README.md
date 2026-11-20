@@ -11,7 +11,7 @@ App web (instalable en el móvil) para que un entrenador planifique las sesiones
 
 Las pautas de alimentación y pasos se guardan con la fecha desde la que rigen, así queda el historial de cambios.
 - **Atleta:** cinco pestañas:
-  - **Calendario** (se abre al entrar): vista mensual con toda su preparación. Arriba, acceso directo a la sesión de hoy y a las que tenga sin registrar de la semana. Pulsando una sesión ve los ejercicios y anota lo que ha hecho (si una serie la ha hecho tal cual, basta con pulsar ✓).
+  - **Calendario** (se abre al entrar): vista mensual con toda su preparación. Arriba, el resumen de hoy: la sesión que le toca, la pauta de alimentación (kcal y macros) y la de pasos, con lo que lleva registrado, más las sesiones que tenga sin registrar de la semana. Pulsando una sesión ve los ejercicios y anota lo que ha hecho (si una serie la ha hecho tal cual, basta con pulsar ✓).
   - **Microciclo:** la semana en horizontal, un día por tarjeta, con el título de cada sesión, la lista de sus ejercicios y su estado. En el móvil se desliza de lado y empieza en el día de hoy.
   - **Alimentación:** su pauta de kcal y macros, y un formulario para apuntar lo que ha comido cada día (kcal y, si quiere, macros), con la gráfica de los últimos días frente a la pauta.
   - **Pasos:** su pauta de pasos y una rueda para apuntar los pasos de cada día (girar a la derecha suma 100 por muesca, a la izquierda resta; una vuelta son 6.000; también hay botones de ±100 y ±1.000). Parte de los últimos pasos registrados o de la pauta. Con la gráfica frente a la pauta.
