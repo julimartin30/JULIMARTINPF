@@ -1,0 +1,17 @@
+{
+ "formato": "entreno-atleta",
+ "version": 1,
+ "actualizado": "2026-11-20T14:49:24.153Z",
+ "llaves": {
+  "44b2b3ff918b30f8fa18345898c4863d1e5b6fa749c60274e038adfb602cb0cd": {
+   "sal": "x0ITGzX2SAIMWCBaKF9FWQ==",
+   "iter": 310000,
+   "iv": "LoUPYcBT5JAW6ctn",
+   "ct": "19BdQF33Ry/tBiMOucbqQzXDNw/fMRv0Km4Pvg64iWJ+swR+d3Ua1BGeSX/RWT9B"
+  }
+ },
+ "datos": {
+  "iv": "RoL1ikYhvKAzun2b",
+  "ct": "V9jo15nwGHlXGaAp4SXKawt8idgkCMYT7CqliQK/SxXuf6d2ftnQDg+vHIh59xE/uTIzpgQ6cMK7rosuK0BPO1WOu4PoqcnL5Hsoj0hx2pghhgycKMqjIBK/trQuIv4cRKSqGyQt1bJ6Lh3P/E7GT7ebZctajnmsh8HHdrT1WowzJcQit35lp7MwbLHpxcarwGa7IzJTWE9Yjm0UxLOiIgrUdjcAHgPXkqqcwWYkItapcfQBP7VZSitcakQPGvC3DrTIMY/HF39GaSkRbeus5V+Utg43vdJcGszCnXins1h1wzRQtQy3Wds+CwpKGXb26H6JmgK1JRXOr97RLVqYkYeO7OLTiAbsWciqKv+MLvvNM8hB7wBvj5Xya8gZUUfC0LiISDlntjyA/hfQ5bWLGgt+TClvt79Fysx/BD3o3Vdly6YX1vSBZWFs6vim5U6UUrNr6NyJVF84G7Hh91M3XQXreBtNv1FSCTr/ab5Mtkj+u/TQ9/cZtYe0E3HfPH0KKw=="
+ }
+}
