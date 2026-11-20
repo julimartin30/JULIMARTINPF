@@ -41,9 +41,9 @@
   function montar(contenedor, dibujar) {
     contenedor.classList.add('grafica');
     const pintar = () => {
-      const ancho = Math.max(260, contenedor.clientWidth || 600);
+      const ancho = Math.max(contenedor.classList.contains('compacta') ? 80 : 260, contenedor.clientWidth || 600);
       contenedor.replaceChildren();
-      dibujar(ancho);
+      dibujar(ancho, contenedor.clientHeight);
     };
     pintar();
     if (global.ResizeObserver) {
@@ -83,9 +83,11 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
   /* ---------- Línea temporal (una serie) ---------- */
-  function lineas(contenedor, { puntos, unidad = '', decimales = 1, color = CATEGORICA[0] }) {
+  function lineas(contenedor, { puntos, unidad = '', decimales = 1, color = CATEGORICA[0], compacto = false }) {
     const ps = puntos.filter((p) => p.y != null).sort((a, b) => a.x.localeCompare(b.x));
-    montar(contenedor, (ancho) => {
+    if (compacto) contenedor.classList.add('compacta');
+    montar(contenedor, (ancho, altoCaja) => {
+      if (compacto) return lineaCompacta(contenedor, ps, ancho, Math.max(60, altoCaja || 90), color);
       const alto = 210;
       const m = { i: 44, d: 66, s: 14, b: 28 };
       const svg = n('svg', { width: ancho, height: alto, viewBox: `0 0 ${ancho} ${alto}`, 'aria-hidden': 'true' }, contenedor);
@@ -140,8 +142,10 @@
   }
 
   /* ---------- Barras apiladas por categoría (semanas) ---------- */
-  function barras(contenedor, { categorias, detalle, series, unidad = '', decimales = 0 }) {
-    montar(contenedor, (ancho) => {
+  function barras(contenedor, { categorias, detalle, series, unidad = '', decimales = 0, compacto = false }) {
+    if (compacto) contenedor.classList.add('compacta');
+    montar(contenedor, (ancho, altoCaja) => {
+      if (compacto) return barrasCompactas(contenedor, categorias, series, ancho, Math.max(60, altoCaja || 90));
       const alto = 220;
       const m = { i: 48, d: 10, s: 14, b: 28 };
       const svg = n('svg', { width: ancho, height: alto, viewBox: `0 0 ${ancho} ${alto}`, 'aria-hidden': 'true' }, contenedor);
@@ -190,6 +194,52 @@
         capa.addEventListener('pointermove', ver);
         capa.addEventListener('pointerdown', ver);
         capa.addEventListener('pointerleave', () => tt.ocultar());
+      });
+    });
+  }
+
+  /* ---------- Versiones compactas (tarjetas): sin ejes, sin textos, sin interacción ---------- */
+  function lineaCompacta(contenedor, ps, ancho, alto, color) {
+    const svg = n('svg', { width: ancho, height: alto, viewBox: `0 0 ${ancho} ${alto}`, 'aria-hidden': 'true' }, contenedor);
+    const ys = ps.map((p) => p.y);
+    let min = Math.min(...ys);
+    let max = Math.max(...ys);
+    if (min === max) (min -= 1), (max += 1);
+    const pad = 7;
+    const t0 = new Date(ps[0].x).getTime();
+    const t1 = new Date(ps[ps.length - 1].x).getTime();
+    const X = (x) => (ps.length === 1 ? ancho / 2 : pad + ((new Date(x).getTime() - t0) / (t1 - t0 || 1)) * (ancho - 2 * pad));
+    const Y = (y) => pad + (1 - (y - min) / (max - min)) * (alto - 2 * pad);
+    n('line', { x1: 0, x2: ancho, y1: alto - 1, y2: alto - 1, stroke: T.rejilla, 'stroke-width': 1 }, svg);
+    if (ps.length > 1) {
+      const d = ps.map((p) => `${X(p.x).toFixed(1)} ${Y(p.y).toFixed(1)}`).join('L');
+      n('path', { d: `M${X(ps[0].x)} ${alto}L${d}L${X(ps[ps.length - 1].x)} ${alto}Z`, fill: color, 'fill-opacity': 0.1 }, svg);
+      n('path', { d: 'M' + d, fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+    }
+    const u = ps[ps.length - 1];
+    n('circle', { cx: X(u.x), cy: Y(u.y), r: 4, fill: color, stroke: T.superficie, 'stroke-width': 2 }, svg);
+  }
+
+  function barrasCompactas(contenedor, categorias, series, ancho, alto) {
+    const svg = n('svg', { width: ancho, height: alto, viewBox: `0 0 ${ancho} ${alto}`, 'aria-hidden': 'true' }, contenedor);
+    const totales = categorias.map((_, i) => series.reduce((t, se) => t + (se.valores[i] || 0), 0));
+    const max = Math.max(...totales, 1);
+    const banda = ancho / categorias.length;
+    const bw = Math.max(3, Math.min(18, banda * 0.66));
+    const Y = (v) => (v / max) * (alto - 4);
+    n('line', { x1: 0, x2: ancho, y1: alto - 0.5, y2: alto - 0.5, stroke: T.eje, 'stroke-width': 1 }, svg);
+    categorias.forEach((_, i) => {
+      let base = 0;
+      const x = banda * i + (banda - bw) / 2;
+      const vis = series.filter((se) => (se.valores[i] || 0) > 0);
+      vis.forEach((se, j) => {
+        const h = Y(se.valores[i]);
+        const gap = j > 0 ? 1.5 : 0;
+        const r = j === vis.length - 1 ? Math.min(3, h / 2, bw / 2) : 0;
+        const top = alto - base - h;
+        const hh = Math.max(1, h - gap);
+        n('path', { d: `M${x} ${top + hh}V${top + r}${r ? `Q${x} ${top} ${x + r} ${top}` : ''}H${x + bw - r}${r ? `Q${x + bw} ${top} ${x + bw} ${top + r}` : ''}V${top + hh}Z`, fill: se.color, transform: `translate(0 ${-gap})` }, svg);
+        base += h;
       });
     });
   }

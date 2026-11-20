@@ -364,7 +364,7 @@
       const [vista, x] = partes;
       if (vista === 's' && x) return vistaSesionAtleta(x);
       if (vista === 'microciclo') return await vistaMicrociclo(x);
-      if (vista === 'evolucion') return await vistaEvolucionAtleta();
+      if (vista === 'evolucion') return await vistaEvolucionAtleta(x);
       if (vista === 'cuenta') return vistaCuentaAtleta();
       return await vistaCalendarioAtleta(vista === 'calendario' ? x : null);
     } catch (e) {
@@ -577,6 +577,8 @@
     else if (pestana === 'plan') pintarPlanificacion(contenido, a, d, arg);
     else
       pintarEvolucion(contenido, d, {
+        base: `#/atleta/${a.id}/evolucion`,
+        detalle: arg,
         guardar: async (mid, medida) => {
           S.atletas[a.id] = await Datos.guardarMedida(a.ruta, Cripto.unb64(a.dek), mid, medida);
           return S.atletas[a.id];
@@ -1143,21 +1145,80 @@
     return GRUPOS.includes(g) ? g : 'Otros';
   };
 
-  function pintarEvolucion(contenido, datos, { guardar }) {
+  /**
+   * Evolución: tarjetas cuadradas (gráfica pequeña + resumen). Al pulsar una, se abre su detalle.
+   * op.base: ruta de la vista (p. ej. '#/evolucion'); op.detalle: 'peso' | 'volumen' | 'km' | 'pliegues' | null
+   */
+  function pintarEvolucion(contenido, datos, op) {
+    const { guardar, base, detalle: abierta } = op;
+    const repintar = () => pintarEvolucion(contenido, datos, op);
     const semanas = S.evoSemanas || 12;
     const metrica = S.evoMetrica || 'kg';
     const ev = Datos.evolucion(datos, semanas, grupoDe);
     const desde = ev.semanas[0];
     const etiquetas = ev.semanas.map((w) => Graficas.corta(w));
-    const detalle = ev.semanas.map((w) => `Semana del ${Graficas.larga(w)}`);
+    const detalleSem = ev.semanas.map((w) => `Semana del ${Graficas.larga(w)}`);
     const medidas = (datos.medidas || []).slice().sort((x, y) => x.fecha.localeCompare(y.fecha));
     const enRango = medidas.filter((m) => m.fecha >= desde);
+    const fmt1 = (v) => Graficas.fmt(v, 1);
+    const pct = (a, b) => (a == null || b == null || !a ? null : Math.round(((b - a) / a) * 1000) / 10);
+    const textoPct = (p) => (p == null ? '' : `${p > 0 ? '+' : ''}${Graficas.fmt(p, 1)}%`);
 
-    const rango = el(
-      'div.chips.chips-oscuros',
-      { role: 'group', 'aria-label': 'Periodo' },
-      [8, 12, 26, 52].map((n) => el('button.chip-filtro', { type: 'button', 'aria-pressed': String(n === semanas), onclick: () => ((S.evoSemanas = n), pintarEvolucion(contenido, datos, { guardar })) }, n === 52 ? '1 año' : `${n} semanas`))
-    );
+    // --- Series de datos ---
+    const pesos = enRango.filter((m) => Datos.num(m.peso) != null).map((m) => ({ x: m.fecha, y: Datos.num(m.peso) }));
+    const pliegues = enRango.map((m) => ({ x: m.fecha, y: Datos.sumaPliegues(m) })).filter((p) => p.y != null);
+    const seriesGrupo = GRUPOS.map((g, i) => ({ nombre: NOMBRE_GRUPO[g], color: Graficas.CATEGORICA[i], valores: ev.grupos[g] ? ev.grupos[g][metrica] : [] })).filter((x) => x.valores.some((v) => v > 0));
+    const seriesKm = Datos.ZONAS.map((z, i) => ({ nombre: Datos.NOMBRES_ZONA[z], color: Graficas.ORDINAL_AZUL[i], valores: ev.km[z].map((v) => Math.round(v * 10) / 10) })).filter((x) => x.valores.some((v) => v > 0));
+    const totalesSemana = (series) => ev.semanas.map((_, i) => series.reduce((t, s) => t + (s.valores[i] || 0), 0));
+    /** Última semana completa con datos frente a la anterior con datos (la semana en curso solo cuenta si no hay otra). */
+    const ultimaVsAnterior = (tot) => {
+      let conDatos = tot.map((v, i) => [v, i]).filter(([v]) => v > 0);
+      if (conDatos.length > 1 && conDatos[conDatos.length - 1][1] === tot.length - 1) conDatos = conDatos.slice(0, -1);
+      if (!conDatos.length) return null;
+      const [v, i] = conDatos[conDatos.length - 1];
+      const prev = conDatos.length > 1 ? conDatos[conDatos.length - 2][0] : null;
+      return { v, semana: ev.semanas[i], cambio: pct(prev, v) };
+    };
+    const totVol = totalesSemana(seriesGrupo);
+    const totKm = totalesSemana(seriesKm);
+    const rVol = ultimaVsAnterior(totVol);
+    const rKm = ultimaVsAnterior(totKm);
+    const kmPeriodo = totKm.reduce((a, b) => a + b, 0);
+
+    const metricas = {
+      peso: {
+        titulo: 'Peso',
+        valor: pesos.length ? `${fmt1(pesos[pesos.length - 1].y)} kg` : null,
+        cambio: pesos.length > 1 ? textoPct(pct(pesos[0].y, pesos[pesos.length - 1].y)) : '',
+        nota: pesos.length > 1 ? `desde el ${Graficas.corta(pesos[0].x)}` : pesos.length ? Graficas.larga(pesos[0].x) : 'Sin mediciones',
+        tieneDatos: pesos.length > 0,
+        mini: (c) => Graficas.lineas(c, { puntos: pesos, color: Graficas.CATEGORICA[0], compacto: true }),
+      },
+      volumen: {
+        titulo: 'Volumen',
+        valor: rVol ? (metrica === 'kg' ? `${Graficas.fmt(rVol.v)} kg` : `${Graficas.fmt(rVol.v)} series`) : null,
+        cambio: rVol ? textoPct(rVol.cambio) : '',
+        nota: rVol ? `semana del ${Graficas.corta(rVol.semana)}` : 'Sin series registradas',
+        tieneDatos: seriesGrupo.length > 0,
+        mini: (c) => Graficas.barras(c, { categorias: etiquetas, series: seriesGrupo, compacto: true }),
+      },
+      km: {
+        titulo: 'Kilómetros',
+        valor: rKm ? `${fmt1(rKm.v)} km` : null,
+        cambio: rKm ? textoPct(rKm.cambio) : '',
+        nota: rKm ? `semana del ${Graficas.corta(rKm.semana)} · ${fmt1(kmPeriodo)} km en total` : 'Sin km registrados',
+        tieneDatos: seriesKm.length > 0,
+        mini: (c) => Graficas.barras(c, { categorias: etiquetas, series: seriesKm, compacto: true }),
+      },
+      pliegues: {
+        titulo: 'Suma de pliegues',
+        valor: pliegues.length ? `${fmt1(pliegues[pliegues.length - 1].y)} mm` : null,
+        cambio: pliegues.length > 1 ? textoPct(pct(pliegues[0].y, pliegues[pliegues.length - 1].y)) : '',
+        nota: pliegues.length > 1 ? `desde el ${Graficas.corta(pliegues[0].x)}` : pliegues.length ? Graficas.larga(pliegues[0].x) : 'Sin mediciones',
+        tieneDatos: pliegues.length > 0,
+        mini: (c) => Graficas.lineas(c, { puntos: pliegues, color: Graficas.CATEGORICA[1], compacto: true }),
+      },
+    };
 
     const nuevaMedida = async (m) => {
       const r = await dialogoMedida(m);
@@ -1166,100 +1227,115 @@
         const nuevos = await guardar(r.id, r.medida);
         if (nuevos) Object.assign(datos, nuevos);
         aviso(r.medida ? 'Medición guardada' : 'Medición eliminada');
-        pintarEvolucion(contenido, datos, { guardar });
+        repintar();
       } catch (e) {
         aviso(errorTexto(e), 'error');
       }
     };
 
+    const rango = el(
+      'div.chips.chips-oscuros',
+      { role: 'group', 'aria-label': 'Periodo' },
+      [8, 12, 26, 52].map((n) => el('button.chip-filtro', { type: 'button', 'aria-pressed': String(n === semanas), onclick: () => ((S.evoSemanas = n), repintar()) }, n === 52 ? '1 año' : `${n} semanas`))
+    );
+    const botonMedida = el('button.btn.btn-primario', { type: 'button', onclick: () => nuevaMedida(null) }, '+ Añadir medición');
+
+    /* ---------- Vista de tarjetas ---------- */
+    if (!metricas[abierta]) {
+      const minis = [];
+      const tarjetas = Object.entries(metricas).map(([clave, x]) => {
+        const g = el('div.mini-grafica');
+        if (x.tieneDatos) minis.push(() => x.mini(g));
+        const resumen = x.valor ? `${x.titulo} ${x.valor}${x.cambio ? ` (${x.cambio})` : ''}` : `${x.titulo}: sin datos`;
+        return el(
+          'a.tarjeta-metrica' + (x.tieneDatos ? '' : '.sin-datos'),
+          { href: `${base}/${clave}`, 'aria-label': `${resumen}. ${x.nota}. Ver detalle` },
+          el('span.metrica-titulo', x.titulo),
+          el('span.metrica-valor', x.valor || '—', x.cambio && el('small.metrica-cambio', ` (${x.cambio})`)),
+          el('span.metrica-nota', x.nota),
+          x.tieneDatos ? g : el('div.mini-grafica.vacia', 'Sin datos aún')
+        );
+      });
+      contenido.replaceChildren(el('div.cabecera', rango, botonMedida), el('div.rejilla-metricas', tarjetas), el('p.ayuda-blanca', 'Pulsa una tarjeta para ver el detalle.'));
+      minis.forEach((f) => f());
+      return;
+    }
+
+    /* ---------- Detalle de una métrica ---------- */
+    const x = metricas[abierta];
+    const g = el('div');
     const vacio = (t) => el('p.vacio-grafica', t);
-    const tarjetaGrafica = (titulo, sub, cuerpo, extra) => el('section.tarjeta.tarjeta-grafica', el('div.fila-sep', el('div', el('h2', titulo), sub && el('p.meta', sub)), extra || ''), cuerpo);
-
-    // 1. Peso
-    const pesos = enRango.filter((m) => Datos.num(m.peso) != null).map((m) => ({ x: m.fecha, y: Datos.num(m.peso) }));
-    const gPeso = el('div');
-    const difPeso = pesos.length > 1 ? Math.round((pesos[pesos.length - 1].y - pesos[0].y) * 10) / 10 : null;
-    // 2. Volumen por grupo
-    const seriesGrupo = GRUPOS.map((g, i) => ({ nombre: NOMBRE_GRUPO[g], color: Graficas.CATEGORICA[i], valores: ev.grupos[g] ? ev.grupos[g][metrica] : [] })).filter((x) => x.valores.some((v) => v > 0));
-    const gVol = el('div');
-    // 3. Km
-    const seriesKm = Datos.ZONAS.map((z, i) => ({ nombre: Datos.NOMBRES_ZONA[z], color: Graficas.ORDINAL_AZUL[i], valores: ev.km[z].map((v) => Math.round(v * 10) / 10) })).filter((x) => x.valores.some((v) => v > 0));
-    const gKm = el('div');
-    const totalKm = Math.round(seriesKm.reduce((s, x) => s + x.valores.reduce((a, b) => a + b, 0), 0) * 10) / 10;
-    // 4. Pliegues
-    const pliegues = enRango.map((m) => ({ x: m.fecha, y: Datos.sumaPliegues(m) })).filter((p) => p.y != null);
-    const gPl = el('div');
-    const difPl = pliegues.length > 1 ? Math.round((pliegues[pliegues.length - 1].y - pliegues[0].y) * 10) / 10 : null;
-    const signo = (v) => (v > 0 ? '+' : '') + Graficas.fmt(v, 1);
-
-    contenido.replaceChildren(
-      el('div.cabecera', rango, el('button.btn.btn-primario', { type: 'button', onclick: () => nuevaMedida(null) }, '+ Añadir medición')),
-      tarjetaGrafica(
-        'Peso corporal',
-        pesos.length ? `Último: ${Graficas.fmt(pesos[pesos.length - 1].y, 1)} kg` + (difPeso != null ? ` (${signo(difPeso)} kg en el periodo)` : '') : null,
-        pesos.length ? [gPeso, Graficas.tabla(['Fecha', 'Peso (kg)'], pesos.map((p) => [Graficas.larga(p.x), Graficas.fmt(p.y, 1)]))] : vacio('Sin mediciones de peso en este periodo. Pulsa «+ Añadir medición».')
-      ),
-      tarjetaGrafica(
-        'Volumen por grupo muscular',
-        metrica === 'kg' ? 'Kilos totales levantados por semana (repeticiones × kilos registrados)' : 'Series hechas por semana',
-        seriesGrupo.length
-          ? [Graficas.leyenda(seriesGrupo), gVol, Graficas.tabla(['Semana', ...seriesGrupo.map((x) => x.nombre)], ev.semanas.map((w, i) => [Graficas.corta(w), ...seriesGrupo.map((x) => Graficas.fmt(x.valores[i] || 0))]))]
-          : vacio('Aún no hay series registradas en este periodo.'),
-        el(
-          'div.segmentado.segmentado-peq',
-          { role: 'radiogroup', 'aria-label': 'Medida del volumen' },
-          [
-            ['kg', 'Kilos'],
-            ['series', 'Series'],
-          ].map(([v, t]) => el('button', { type: 'button', role: 'radio', 'aria-checked': String(metrica === v), onclick: () => ((S.evoMetrica = v), pintarEvolucion(contenido, datos, { guardar })) }, t))
-        )
-      ),
-      tarjetaGrafica(
-        'Kilómetros e intensidad',
-        `Km registrados por semana, por zona de intensidad${totalKm ? ` · total ${Graficas.fmt(totalKm, 1)} km` : ''}`,
-        seriesKm.length
-          ? [
-              Graficas.leyenda(seriesKm),
-              gKm,
-              Graficas.tabla(['Semana', ...seriesKm.map((x) => x.nombre.split(' ·')[0]), 'Pautados'], ev.semanas.map((w, i) => [Graficas.corta(w), ...seriesKm.map((x) => Graficas.fmt(x.valores[i] || 0, 1)), Graficas.fmt(ev.kmPautados[i], 1)])),
-            ]
-          : vacio('Aún no hay kilómetros registrados en este periodo. Añade el ejercicio «Carrera» a las sesiones.')
-      ),
-      tarjetaGrafica(
-        'Suma de pliegues',
-        pliegues.length ? `Última: ${Graficas.fmt(pliegues[pliegues.length - 1].y, 1)} mm` + (difPl != null ? ` (${signo(difPl)} mm en el periodo)` : '') + ' · 6 pliegues' : 'Suma de 6 pliegues cutáneos (mm)',
-        pliegues.length ? [gPl, Graficas.tabla(['Fecha', 'Suma (mm)'], pliegues.map((p) => [Graficas.larga(p.x), Graficas.fmt(p.y, 1)]))] : vacio('Sin mediciones de pliegues en este periodo.')
-      ),
-      el(
+    const tablaMedidas = (campo, unidad) => {
+      const filas = medidas.filter((m) => (campo === 'peso' ? Datos.num(m.peso) != null : Datos.sumaPliegues(m) != null)).reverse();
+      return el(
         'section.tarjeta',
         el('h2', 'Mediciones'),
-        medidas.length
+        filas.length
           ? el(
               'table.tabla',
-              el('thead', el('tr', el('th', 'Fecha'), el('th', 'Peso'), el('th', 'Σ pliegues'), el('th', ''))),
+              el('thead', el('tr', el('th', 'Fecha'), el('th', campo === 'peso' ? 'Peso' : 'Σ pliegues'), campo === 'pliegues' && el('th', 'Desglose'), el('th', ''))),
               el(
                 'tbody',
-                medidas
-                  .slice()
-                  .reverse()
-                  .map((m) =>
-                    el(
-                      'tr',
-                      el('td', fechaCorta(m.fecha)),
-                      el('td', m.peso != null ? Graficas.fmt(m.peso, 1) + ' kg' : '—'),
-                      el('td', Datos.sumaPliegues(m) != null ? Graficas.fmt(Datos.sumaPliegues(m), 1) + ' mm' : '—'),
-                      el('td', el('button.btn.btn-peq', { type: 'button', onclick: () => nuevaMedida(m) }, 'Editar'))
-                    )
+                filas.map((m) =>
+                  el(
+                    'tr',
+                    el('td', fechaCorta(m.fecha)),
+                    el('td', fmt1(campo === 'peso' ? Datos.num(m.peso) : Datos.sumaPliegues(m)) + ' ' + unidad),
+                    campo === 'pliegues' && el('td.meta', m.pliegues ? Datos.PLIEGUES.filter(([k]) => m.pliegues[k] != null).map(([k, t]) => `${t} ${fmt1(m.pliegues[k])}`).join(' · ') : 'Solo la suma'),
+                    el('td', el('button.btn.btn-peq', { type: 'button', onclick: () => nuevaMedida(m) }, 'Editar'))
                   )
+                )
               )
             )
           : el('p.meta', 'Todavía no hay mediciones.')
-      )
+      );
+    };
+    let cuerpo;
+    let extra = null;
+    if (abierta === 'peso') cuerpo = pesos.length ? [g, Graficas.tabla(['Fecha', 'Peso (kg)'], pesos.map((p) => [Graficas.larga(p.x), fmt1(p.y)]))] : vacio('Sin mediciones de peso en este periodo. Pulsa «+ Añadir medición».');
+    if (abierta === 'pliegues') cuerpo = pliegues.length ? [g, Graficas.tabla(['Fecha', 'Suma (mm)'], pliegues.map((p) => [Graficas.larga(p.x), fmt1(p.y)]))] : vacio('Sin mediciones de pliegues en este periodo.');
+    if (abierta === 'volumen') {
+      cuerpo = seriesGrupo.length
+        ? [Graficas.leyenda(seriesGrupo), g, Graficas.tabla(['Semana', ...seriesGrupo.map((s) => s.nombre)], ev.semanas.map((w, i) => [Graficas.corta(w), ...seriesGrupo.map((s) => Graficas.fmt(s.valores[i] || 0))]))]
+        : vacio('Aún no hay series registradas en este periodo.');
+      extra = el(
+        'div.segmentado.segmentado-peq',
+        { role: 'radiogroup', 'aria-label': 'Medida del volumen' },
+        [
+          ['kg', 'Kilos'],
+          ['series', 'Series'],
+        ].map(([v, t]) => el('button', { type: 'button', role: 'radio', 'aria-checked': String(metrica === v), onclick: () => ((S.evoMetrica = v), repintar()) }, t))
+      );
+    }
+    if (abierta === 'km')
+      cuerpo = seriesKm.length
+        ? [
+            Graficas.leyenda(seriesKm),
+            g,
+            Graficas.tabla(['Semana', ...seriesKm.map((s) => s.nombre.split(' ·')[0]), 'Pautados'], ev.semanas.map((w, i) => [Graficas.corta(w), ...seriesKm.map((s) => Graficas.fmt(s.valores[i] || 0, 1)), Graficas.fmt(ev.kmPautados[i], 1)])),
+          ]
+        : vacio('Aún no hay kilómetros registrados en este periodo. Añade el ejercicio «Carrera» a las sesiones.');
+    const subtitulos = {
+      peso: 'Peso corporal (kg)',
+      volumen: metrica === 'kg' ? 'Kilos levantados por semana y grupo muscular (repeticiones × kilos)' : 'Series hechas por semana y grupo muscular',
+      km: 'Kilómetros registrados por semana, por zona de intensidad',
+      pliegues: 'Suma de 6 pliegues cutáneos (mm)',
+    };
+    contenido.replaceChildren(
+      el('a.volver', { href: base }, '← Evolución'),
+      el('div.cabecera', rango, (abierta === 'peso' || abierta === 'pliegues') && botonMedida),
+      el(
+        'section.tarjeta.tarjeta-grafica',
+        el('div.fila-sep', el('div', el('h2', x.titulo + (x.valor ? ' · ' + x.valor : '') + (x.cambio ? ` (${x.cambio})` : '')), el('p.meta', subtitulos[abierta] + (x.valor ? ' · ' + x.nota : ''))), extra || ''),
+        cuerpo
+      ),
+      abierta === 'peso' ? tablaMedidas('peso', 'kg') : '',
+      abierta === 'pliegues' ? tablaMedidas('pliegues', 'mm') : ''
     );
-    if (pesos.length) Graficas.lineas(gPeso, { puntos: pesos, unidad: 'kg', decimales: 1, color: Graficas.CATEGORICA[0] });
-    if (seriesGrupo.length) Graficas.barras(gVol, { categorias: etiquetas, detalle, series: seriesGrupo, unidad: metrica === 'kg' ? 'kg' : 'series' });
-    if (seriesKm.length) Graficas.barras(gKm, { categorias: etiquetas, detalle, series: seriesKm, unidad: 'km', decimales: 1 });
-    if (pliegues.length) Graficas.lineas(gPl, { puntos: pliegues, unidad: 'mm', decimales: 1, color: Graficas.CATEGORICA[1] });
+    if (abierta === 'peso' && pesos.length) Graficas.lineas(g, { puntos: pesos, unidad: 'kg', decimales: 1, color: Graficas.CATEGORICA[0] });
+    if (abierta === 'pliegues' && pliegues.length) Graficas.lineas(g, { puntos: pliegues, unidad: 'mm', decimales: 1, color: Graficas.CATEGORICA[1] });
+    if (abierta === 'volumen' && seriesGrupo.length) Graficas.barras(g, { categorias: etiquetas, detalle: detalleSem, series: seriesGrupo, unidad: metrica === 'kg' ? 'kg' : 'series' });
+    if (abierta === 'km' && seriesKm.length) Graficas.barras(g, { categorias: etiquetas, detalle: detalleSem, series: seriesKm, unidad: 'km', decimales: 1 });
   }
 
   /** Diálogo para añadir o editar una medición. Devuelve { id, medida } (medida null = borrar) o null. */
@@ -1636,12 +1712,14 @@
     if (hoyEl) requestAnimationFrame(() => (fila.scrollLeft = Math.max(0, hoyEl.offsetLeft - fila.offsetLeft - 8)));
   }
 
-  async function vistaEvolucionAtleta() {
+  async function vistaEvolucionAtleta(detalle) {
     cargando();
     const d = await refrescarAtleta();
     const contenido = el('div');
     app.replaceChildren(pestanasAtleta('evolucion'), avisoModo() || '', el('h1.titulo-blanco', 'Mi evolución'), contenido);
     pintarEvolucion(contenido, d, {
+      base: '#/evolucion',
+      detalle,
       guardar: async (mid, medida) => {
         const nuevos = await Datos.guardarMedida(S.sesion.ruta, S.sesion.dek, mid, medida);
         S.sesion.datos = nuevos;
