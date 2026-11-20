@@ -5,10 +5,16 @@ App web (instalable en el móvil) para que un entrenador planifique las sesiones
 - **Entrenador:** ve una tarjeta por atleta. Al pulsarla se abre su ficha, con tres pestañas:
   - **Sesiones:** diseña las sesiones de ese atleta (título, ejercicios, series, repeticiones, kilos, kilómetros y zona de intensidad, descansos e indicaciones). Se pueden duplicar o copiar a otro atleta.
   - **Planificación:** calendario mensual. Pulsando un día se añaden una o varias de las sesiones diseñadas (y se pueden repetir varias semanas). Cada sesión aparece en el día con un color según lo que ha cumplido el atleta; al pulsarla se ve serie a serie lo pautado frente a lo realizado.
+  - **Alimentación:** pautas las kcal diarias con su reparto de macros (proteínas, hidratos y grasas en gramos; la app calcula el % de las kcal y los g/kg con su último peso) e indicaciones. Ves lo que registra el atleta día a día frente a la pauta.
+  - **Pasos:** pautas los pasos diarios y ves los que registra el atleta y cuántos días la cumple.
   - **Evolución:** las mismas gráficas que ve el atleta.
-- **Atleta:** tres pestañas:
+
+Las pautas de alimentación y pasos se guardan con la fecha desde la que rigen, así queda el historial de cambios.
+- **Atleta:** cinco pestañas:
   - **Calendario** (se abre al entrar): vista mensual con toda su preparación. Arriba, acceso directo a la sesión de hoy y a las que tenga sin registrar de la semana. Pulsando una sesión ve los ejercicios y anota lo que ha hecho (si una serie la ha hecho tal cual, basta con pulsar ✓).
   - **Microciclo:** la semana en horizontal, un día por tarjeta, con el título de cada sesión, la lista de sus ejercicios y su estado. En el móvil se desliza de lado y empieza en el día de hoy.
+  - **Alimentación:** su pauta de kcal y macros, y un formulario para apuntar lo que ha comido cada día (kcal y, si quiere, macros), con la gráfica de los últimos días frente a la pauta.
+  - **Pasos:** su pauta de pasos y un formulario para apuntar los pasos de cada día, con la gráfica frente a la pauta.
   - **Evolución:** cuatro tarjetas cuadradas con una gráfica pequeña y un resumen (por ejemplo «Peso 76,5 kg (−2,5 %)»): peso corporal, volumen de entrenamiento por grupo muscular, kilómetros según su intensidad (zonas Z1–Z5) y suma de 6 pliegues cutáneos. Al pulsar una tarjeta se abre el detalle: gráfica completa, tabla de datos y, en peso y pliegues, la lista de mediciones para editarlas. El atleta y el entrenador pueden añadir mediciones de peso y pliegues.
     - En peso y pliegues, el porcentaje compara la última medición con la primera del periodo elegido. En volumen y kilómetros, la última semana completa con la anterior.
 - **Cada ejercicio lleva una ilustración animada** que muestra el movimiento, además de los pasos para hacerlo y los errores a evitar. Hay 24 ejercicios de serie (incluida la carrera, que se mide en kilómetros y zona) y el entrenador puede crear los suyos (reutilizando un dibujo, con una foto o con un enlace a vídeo).

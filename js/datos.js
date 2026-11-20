@@ -219,7 +219,7 @@
     const dek = Cripto.aleatorio(32);
     const { id, llave } = await Cripto.llaveParaUsuario(dek, usuario, password);
     const atleta = { id: U.uid(), nombre, usuario, ruta, dek: Cripto.b64(dek), alta: new Date().toISOString() };
-    const datos = { atleta: { id: atleta.id, nombre, usuario }, entrenador: sesion.datos.entrenador.nombre, github: sesion.datos.github, plantillas: [], sesiones: [], registros: {}, medidas: [] };
+    const datos = { atleta: { id: atleta.id, nombre, usuario }, entrenador: sesion.datos.entrenador.nombre, github: sesion.datos.github, plantillas: [], sesiones: [], registros: {}, medidas: [], objetivos: {}, diario: {} };
     const fichero = await sellar('entreno-atleta', dek, { [id]: llave }, datos);
     await actualizarFichero(
       ruta,
@@ -312,7 +312,13 @@
           sesion.dek,
           (d) => {
             d.registros = d.registros || {};
-            ids.forEach((id) => (d.registros[id] = cola[id]));
+            d.diario = d.diario || {};
+            ids.forEach((id) => {
+              if (id.startsWith('diario:')) {
+                const f = id.slice(7);
+                d.diario[f] = { ...(d.diario[f] || {}), ...cola[id] };
+              } else d.registros[id] = cola[id];
+            });
           },
           'Registro de entrenamiento'
         );
@@ -334,7 +340,14 @@
   /** Lo que el atleta tiene en cola se superpone a lo leído del servidor. */
   async function aplicarPendientes(sesion) {
     const cola = await pendientes(sesion);
-    Object.assign((sesion.datos.registros = sesion.datos.registros || {}), cola);
+    sesion.datos.registros = sesion.datos.registros || {};
+    sesion.datos.diario = sesion.datos.diario || {};
+    Object.entries(cola).forEach(([id, v]) => {
+      if (id.startsWith('diario:')) {
+        const f = id.slice(7);
+        sesion.datos.diario[f] = { ...(sesion.datos.diario[f] || {}), ...v };
+      } else sesion.datos.registros[id] = v;
+    });
     return Object.keys(cola).length;
   }
 
@@ -489,7 +502,41 @@
     );
   }
 
+  /* ---------- Alimentación y pasos ---------- */
+  /** Pauta vigente en una fecha: la última de la lista con `desde` <= fecha. */
+  function objetivoEn(lista, fecha) {
+    return (lista || []).filter((o) => o.desde <= fecha).sort((a, b) => a.desde.localeCompare(b.desde)).pop() || null;
+  }
+  const kcalMacros = (o) => Math.round(4 * (num(o.prot) || 0) + 4 * (num(o.hc) || 0) + 9 * (num(o.grasa) || 0));
+
+  /** El entrenador fija una pauta ('nutricion' | 'pasos') desde una fecha. Con pauta null la borra. */
+  function guardarObjetivo(a, tipo, desde, pauta) {
+    return modificarAtleta(
+      a,
+      (d) => {
+        d.objetivos = d.objetivos || {};
+        d.objetivos[tipo] = (d.objetivos[tipo] || []).filter((o) => o.desde !== desde);
+        if (pauta) d.objetivos[tipo].push({ ...pauta, desde });
+      },
+      tipo === 'pasos' ? 'Pauta de pasos' : 'Pauta de alimentación'
+    );
+  }
+
+  /** El atleta registra lo de un día (kcal, macros, pasos). Va por la misma cola que los entrenamientos. */
+  async function guardarDiario(sesion, fecha, valores) {
+    sesion.datos.diario = sesion.datos.diario || {};
+    sesion.datos.diario[fecha] = { ...(sesion.datos.diario[fecha] || {}), ...valores };
+    const cola = await pendientes(sesion);
+    cola['diario:' + fecha] = { ...(cola['diario:' + fecha] || {}), ...valores };
+    ls.set(clavePendiente(sesion), JSON.stringify(await Cripto.sellarDatos(sesion.dek, cola)));
+    return enviarPendientes(sesion);
+  }
+
   global.Datos = {
+    objetivoEn,
+    kcalMacros,
+    guardarObjetivo,
+    guardarDiario,
     sumarDias,
     lunes,
     ZONAS,

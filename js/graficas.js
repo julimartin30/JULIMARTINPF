@@ -142,7 +142,7 @@
   }
 
   /* ---------- Barras apiladas por categoría (semanas) ---------- */
-  function barras(contenedor, { categorias, detalle, series, unidad = '', decimales = 0, compacto = false }) {
+  function barras(contenedor, { categorias, detalle, series, unidad = '', decimales = 0, compacto = false, referencia = null, nombreReferencia = 'Objetivo' }) {
     if (compacto) contenedor.classList.add('compacta');
     montar(contenedor, (ancho, altoCaja) => {
       if (compacto) return barrasCompactas(contenedor, categorias, series, ancho, Math.max(60, altoCaja || 90));
@@ -151,7 +151,7 @@
       const svg = n('svg', { width: ancho, height: alto, viewBox: `0 0 ${ancho} ${alto}`, 'aria-hidden': 'true' }, contenedor);
       const tt = tooltip(contenedor);
       const totales = categorias.map((_, i) => series.reduce((s, se) => s + (se.valores[i] || 0), 0));
-      const ey = escalaY(0, Math.max(...totales, 1));
+      const ey = escalaY(0, Math.max(...totales, ...(referencia || []).filter((v) => v != null), 1));
       const Y = (v) => m.s + (1 - v / ey.max) * (alto - m.s - m.b);
       ey.ticks.forEach((v) => {
         n('line', { x1: m.i, x2: ancho - m.d, y1: Y(v), y2: Y(v), stroke: v === 0 ? T.eje : T.rejilla, 'stroke-width': 1 }, svg);
@@ -181,6 +181,10 @@
           n('path', { d, fill: x.se.color }, svg);
           base += x.v;
         });
+        if (referencia && referencia[i] != null) {
+          const yr = Y(referencia[i]);
+          n('line', { x1: m.i + banda * i + 1, x2: m.i + banda * (i + 1) - 1, y1: yr, y2: yr, stroke: T.tinta, 'stroke-width': 2, 'stroke-dasharray': '5 3' }, svg);
+        }
         const capa = n('rect', { x: m.i + banda * i, y: 0, width: banda, height: alto - m.b, fill: 'transparent' }, svg);
         const ver = () => {
           const filas = series
@@ -189,7 +193,7 @@
             .reverse()
             .map((x) => `<span class="tt-fila"><i style="background:${x.se.color}"></i>${esc(x.se.nombre)}<b>${fmt(x.v, decimales)}</b></span>`)
             .join('');
-          tt.mostrar(`<b>${esc((detalle && detalle[i]) || c)}</b>${filas || '<br>Sin datos'}<span class="tt-fila tt-total">Total<b>${fmt(totales[i], decimales)} ${esc(unidad)}</b></span>`, cx, Y(totales[i]), ancho);
+          tt.mostrar(`<b>${esc((detalle && detalle[i]) || c)}</b>${filas || '<br>Sin datos'}<span class="tt-fila tt-total">Total<b>${fmt(totales[i], decimales)} ${esc(unidad)}</b></span>${referencia && referencia[i] != null ? `<span class="tt-fila">${esc(nombreReferencia)}<b>${fmt(referencia[i], decimales)} ${esc(unidad)}</b></span>` : ''}`, cx, Y(totales[i]), ancho);
         };
         capa.addEventListener('pointermove', ver);
         capa.addEventListener('pointerdown', ver);

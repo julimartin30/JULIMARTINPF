@@ -354,7 +354,7 @@
           if (sub === 'sesion' && x && y === 'editar') return await vistaEditor(id, 'instancia', x);
           if (sub === 'sesion' && x) return await vistaRevision(id, x);
           if (sub === 'disenar') return await vistaEditor(id, 'plantilla', x || 'nueva');
-          if (sub === 'plan' || sub === 'evolucion' || sub === 'sesiones') return await vistaFicha(id, sub, x);
+          if (['plan', 'evolucion', 'sesiones', 'alimentacion', 'pasos'].includes(sub)) return await vistaFicha(id, sub, x);
           return ir(`#/atleta/${id}/sesiones`);
         }
         if (vista === 'ejercicios') return vistaEjercicios();
@@ -365,6 +365,7 @@
       if (vista === 's' && x) return vistaSesionAtleta(x);
       if (vista === 'microciclo') return await vistaMicrociclo(x);
       if (vista === 'evolucion') return await vistaEvolucionAtleta(x);
+      if (vista === 'alimentacion' || vista === 'pasos') return await vistaDiarioAtleta(vista);
       if (vista === 'cuenta') return vistaCuentaAtleta();
       return await vistaCalendarioAtleta(vista === 'calendario' ? x : null);
     } catch (e) {
@@ -375,11 +376,17 @@
   window.addEventListener('hashchange', () => S.sesion && render());
 
   function pestanas(lista, activa, etiqueta) {
-    return el(
+    const nav = el(
       'nav.pestanas',
       { 'aria-label': etiqueta || 'Secciones' },
       lista.map(([h, t, clave]) => el('a.pestana', { href: h, 'aria-current': clave === activa ? 'page' : null }, t))
     );
+    // En el móvil, que la pestaña activa quede a la vista
+    requestAnimationFrame(() => {
+      const act = nav.querySelector('[aria-current="page"]');
+      if (act && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = Math.max(0, act.offsetLeft - nav.clientWidth / 2 + act.offsetWidth / 2);
+    });
+    return nav;
   }
   const pestanasEntrenador = (activa) =>
     pestanas(
@@ -566,6 +573,8 @@
         [
           [`#/atleta/${id}/sesiones`, 'Sesiones', 'sesiones'],
           [`#/atleta/${id}/plan`, 'Planificación', 'plan'],
+          [`#/atleta/${id}/alimentacion`, 'Alimentación', 'alimentacion'],
+          [`#/atleta/${id}/pasos`, 'Pasos', 'pasos'],
           [`#/atleta/${id}/evolucion`, 'Evolución', 'evolucion'],
         ],
         pestana,
@@ -575,7 +584,13 @@
     );
     if (pestana === 'sesiones') pintarSesionesDisenadas(contenido, a, d);
     else if (pestana === 'plan') pintarPlanificacion(contenido, a, d, arg);
-    else
+    else if (pestana === 'alimentacion' || pestana === 'pasos') {
+      const op = {
+        puedePautar: true,
+        guardarObjetivo: async (tipo, desde, pauta) => (S.atletas[a.id] = await Datos.guardarObjetivo(a, tipo, desde, pauta)),
+      };
+      (pestana === 'pasos' ? pintarPasos : pintarAlimentacion)(contenido, d, op);
+    } else
       pintarEvolucion(contenido, d, {
         base: `#/atleta/${a.id}/evolucion`,
         detalle: arg,
@@ -1338,6 +1353,364 @@
     if (abierta === 'km' && seriesKm.length) Graficas.barras(g, { categorias: etiquetas, detalle: detalleSem, series: seriesKm, unidad: 'km', decimales: 1 });
   }
 
+  /* ================= ALIMENTACIÓN Y PASOS (entrenador y atleta) ================= */
+  const MACROS = [
+    ['prot', 'Proteínas', 4],
+    ['hc', 'Hidratos', 4],
+    ['grasa', 'Grasas', 9],
+  ];
+  const fmt0 = (v) => Graficas.fmt(v, 0);
+  const ultimoPeso = (datos) => {
+    const m = (datos.medidas || []).filter((x) => Datos.num(x.peso) != null).sort((a, b) => a.fecha.localeCompare(b.fecha)).pop();
+    return m ? Datos.num(m.peso) : null;
+  };
+  const diasAtras = (n) => Array.from({ length: n }, (_, i) => Datos.sumarDias(Datos.hoy(), -(n - 1 - i)));
+
+  function selectorDias(repintar) {
+    const n = S.diasDiario || 14;
+    return el(
+      'div.chips.chips-oscuros',
+      { role: 'group', 'aria-label': 'Periodo' },
+      [7, 14, 28].map((x) => el('button.chip-filtro', { type: 'button', 'aria-pressed': String(x === n), onclick: () => ((S.diasDiario = x), repintar()) }, `${x} días`))
+    );
+  }
+
+  /** Tarjeta "Registrar día" del atleta. `campos`: [[clave, etiqueta, paso]]. */
+  function tarjetaRegistroDia(datos, titulo, campos, guardarDiario, alGuardar, completar) {
+    const fecha = el('input', { type: 'date', value: Datos.hoy(), max: Datos.hoy() });
+    const entradas = campos.map(([k, t, paso]) => {
+      const i = el('input', { type: 'number', inputmode: paso < 1 ? 'decimal' : 'numeric', min: 0, step: paso });
+      i.dataset.k = k;
+      return [k, i, el('label.campo', el('span', t), i)];
+    });
+    const rellenar = () => {
+      const dia = (datos.diario || {})[fecha.value] || {};
+      entradas.forEach(([k, i]) => (i.value = dia[k] ?? ''));
+    };
+    fecha.addEventListener('change', rellenar);
+    rellenar();
+    const estado = el('span.guardado', { role: 'status' });
+    return el(
+      'section.tarjeta',
+      el('h2', titulo),
+      el('div.rejilla', el('label.campo', el('span', 'Día'), fecha), entradas.map((e) => e[2])),
+      el(
+        'div.fila-botones',
+        el(
+          'button.btn.btn-primario',
+          {
+            type: 'button',
+            onclick: async (ev) => {
+              const vals = {};
+              entradas.forEach(([k, i]) => (vals[k] = Datos.num(i.value)));
+              if (completar) completar(vals);
+              const btn = ev.currentTarget;
+              btn.disabled = true;
+              const ok = await guardarDiario(fecha.value || Datos.hoy(), vals);
+              btn.disabled = false;
+              aviso(ok ? 'Guardado. Tu entrenador ya puede verlo.' : 'Guardado en el móvil. Se enviará al recuperar la conexión.', ok ? 'ok' : 'alerta');
+              alGuardar();
+            },
+          },
+          'Guardar'
+        ),
+        estado
+      )
+    );
+  }
+
+  function tarjetaHistorialPautas(lista, texto, borrar) {
+    const ordenadas = (lista || []).slice().sort((a, b) => b.desde.localeCompare(a.desde));
+    if (!ordenadas.length) return '';
+    return el(
+      'section.tarjeta',
+      el('h2', 'Historial de pautas'),
+      el(
+        'table.tabla',
+        el('thead', el('tr', el('th', 'Desde'), el('th', 'Pauta'), el('th', ''))),
+        el('tbody', ordenadas.map((o) => el('tr', el('td', fechaCorta(o.desde)), el('td', texto(o)), el('td', el('button.btn.btn-peq.btn-peligro', { type: 'button', onclick: () => borrar(o) }, 'Borrar')))))
+      )
+    );
+  }
+
+  /* --- Alimentación --- */
+  async function dialogoPautaNutricion(actual) {
+    const x = actual ? { ...actual } : { kcal: null, prot: null, hc: null, grasa: null, nota: '' };
+    const desde = el('input', { type: 'date', value: Datos.hoy() });
+    const kcal = el('input', { type: 'number', inputmode: 'numeric', min: 0, step: 10, value: x.kcal ?? '' });
+    const resumen = el('p.meta', { 'aria-live': 'polite' });
+    const ins = MACROS.map(([k, t]) => {
+      const i = el('input', { type: 'number', inputmode: 'numeric', min: 0, step: 1, value: x[k] ?? '', oninput: () => calc() });
+      i.dataset.k = k;
+      return i;
+    });
+    const valores = () => Object.fromEntries(ins.map((i) => [i.dataset.k, Datos.num(i.value)]));
+    const calc = () => {
+      const v = valores();
+      const suma = Datos.kcalMacros(v);
+      const total = Datos.num(kcal.value) || suma;
+      resumen.textContent = suma
+        ? `Los macros suman ${fmt0(suma)} kcal · ` + MACROS.map(([k, t, f]) => `${t} ${total ? Math.round(((v[k] || 0) * f * 100) / total) : 0}%`).join(' · ')
+        : 'Escribe los gramos de cada macronutriente.';
+    };
+    kcal.addEventListener('input', calc);
+    calc();
+    const nota = el('textarea', { rows: 2, placeholder: 'p. ej. 5 comidas; hidratos sobre todo alrededor del entrenamiento' }, x.nota || '');
+    const r = await dialogo({
+      titulo: 'Pauta de alimentación',
+      cuerpo: [
+        el('div.rejilla', el('label.campo', el('span', 'Desde'), desde), el('label.campo', el('span', 'Kcal diarias'), kcal)),
+        el('div.rejilla', MACROS.map(([k, t], i) => el('label.campo', el('span', t + ' (g)'), ins[i]))),
+        resumen,
+        el('button.btn.btn-peq', { type: 'button', onclick: () => ((kcal.value = Datos.kcalMacros(valores()) || ''), calc()) }, 'Poner las kcal que suman los macros'),
+        el('label.campo', el('span', 'Indicaciones (opcional)'), nota),
+      ],
+      botones: [
+        { texto: 'Cancelar', valor: null },
+        { texto: 'Guardar', valor: true, primario: true },
+      ],
+    });
+    if (!r) return null;
+    const v = valores();
+    const pauta = { kcal: Datos.num(kcal.value) || Datos.kcalMacros(v) || null, ...v, nota: nota.value.trim() };
+    if (!pauta.kcal) {
+      aviso('Escribe las kcal o los macros.', 'error');
+      return null;
+    }
+    return { desde: desde.value || Datos.hoy(), pauta };
+  }
+
+  function pintarAlimentacion(contenido, datos, op) {
+    const repintar = () => pintarAlimentacion(contenido, datos, op);
+    const h = Datos.hoy();
+    const lista = (datos.objetivos || {}).nutricion || [];
+    const pauta = Datos.objetivoEn(lista, h);
+    const peso = ultimoPeso(datos);
+    const n = S.diasDiario || 14;
+    const dias = diasAtras(n);
+    const diario = datos.diario || {};
+    const kcalDia = dias.map((f) => Datos.num((diario[f] || {}).kcal));
+    const refDia = dias.map((f) => {
+      const o = Datos.objetivoEn(lista, f);
+      return o ? Datos.num(o.kcal) : null;
+    });
+    const registrados = dias.filter((f, i) => kcalDia[i] != null);
+    const media = registrados.length ? registrados.reduce((t, f) => t + Datos.num(diario[f].kcal), 0) / registrados.length : null;
+    const conPauta = dias.map((f, i) => (kcalDia[i] != null && refDia[i] ? Math.max(0, 100 - (Math.abs(kcalDia[i] - refDia[i]) / refDia[i]) * 100) : null)).filter((x) => x != null);
+    const ajuste = conPauta.length ? Math.round(conPauta.reduce((a, b) => a + b, 0) / conPauta.length) : null;
+
+    const cambiar = async () => {
+      const r = await dialogoPautaNutricion(pauta);
+      if (!r) return;
+      try {
+        Object.assign(datos, await op.guardarObjetivo('nutricion', r.desde, r.pauta));
+        aviso('Pauta guardada');
+        repintar();
+      } catch (e) {
+        aviso(errorTexto(e), 'error');
+      }
+    };
+
+    // Tarjeta de la pauta: kcal + barra de reparto de macros
+    let tarjetaPauta;
+    if (pauta) {
+      const total = Datos.num(pauta.kcal) || Datos.kcalMacros(pauta);
+      const partes = MACROS.map(([k, t, f], i) => ({ k, t, g: Datos.num(pauta[k]), kcal: (Datos.num(pauta[k]) || 0) * f, color: Graficas.CATEGORICA[i] }));
+      const sumaKcal = partes.reduce((a, p) => a + p.kcal, 0);
+      tarjetaPauta = el(
+        'section.tarjeta.pauta',
+        el('div.fila-sep', el('h2', 'Pauta diaria'), op.puedePautar && el('button.btn.btn-peq', { type: 'button', onclick: cambiar }, 'Cambiar pauta')),
+        el('p.cifra-grande', fmt0(total), el('small', ' kcal al día')),
+        sumaKcal > 0 &&
+          el(
+            'div.barra-macros',
+            { role: 'img', 'aria-label': 'Reparto de macronutrientes: ' + partes.map((p) => `${p.t} ${Math.round((p.kcal * 100) / sumaKcal)}%`).join(', ') },
+            partes.filter((p) => p.kcal > 0).map((p) => el('span', { style: `flex:${p.kcal};background:${p.color}` }))
+          ),
+        sumaKcal > 0 &&
+          el(
+            'div.macros',
+            partes.map((p) =>
+              el(
+                'div.macro',
+                el('span.macro-nombre', el('i', { style: `background:${p.color}` }), p.t),
+                el('b', p.g != null ? `${fmt0(p.g)} g` : '—'),
+                el('small', [p.g != null && sumaKcal ? `${Math.round((p.kcal * 100) / total)}% de las kcal` : '', p.g != null && peso ? ` · ${Graficas.fmt(p.g / peso, 1)} g/kg` : ''].join(''))
+              )
+            )
+          ),
+        pauta.nota && el('div.nota.nota-info', el('b', 'Indicaciones: '), pauta.nota),
+        el('p.meta', `Vigente desde el ${fechaCorta(pauta.desde)}` + (peso ? ` · g/kg calculados con ${Graficas.fmt(peso, 1)} kg` : ''))
+      );
+    } else {
+      tarjetaPauta = el(
+        'section.tarjeta.vacio',
+        el('p', op.puedePautar ? 'Aún no has fijado una pauta de alimentación.' : 'Tu entrenador aún no ha fijado una pauta de alimentación.'),
+        op.puedePautar && el('button.btn.btn-primario', { type: 'button', onclick: cambiar }, 'Fijar pauta')
+      );
+    }
+
+    const g = el('div');
+    const medias = MACROS.map(([k, t]) => {
+      const v = registrados.map((f) => Datos.num(diario[f][k])).filter((x) => x != null);
+      return [t, v.length ? v.reduce((a, b) => a + b, 0) / v.length : null, pauta ? Datos.num(pauta[k]) : null];
+    });
+    contenido.replaceChildren(
+      tarjetaPauta,
+      op.guardarDiario
+        ? tarjetaRegistroDia(
+            datos,
+            'Registrar lo que he comido',
+            [
+              ['kcal', 'Kcal', 10],
+              ['prot', 'Proteínas (g)', 1],
+              ['hc', 'Hidratos (g)', 1],
+              ['grasa', 'Grasas (g)', 1],
+            ],
+            op.guardarDiario,
+            repintar,
+            (v) => {
+              if (v.kcal == null && (v.prot != null || v.hc != null || v.grasa != null)) v.kcal = Datos.kcalMacros(v);
+            }
+          )
+        : '',
+      el('div.cabecera', selectorDias(repintar)),
+      el(
+        'section.tarjeta.tarjeta-grafica',
+        el('h2', 'Kcal consumidas'),
+        el(
+          'p.meta',
+          registrados.length
+            ? `Media: ${fmt0(media)} kcal · ${registrados.length} de ${n} días registrados` + (ajuste != null ? ` · ajuste a la pauta ${ajuste}%` : '')
+            : `Sin registros en los últimos ${n} días.`
+        ),
+        registrados.length
+          ? [
+              el('div.leyenda', el('span', el('i', { style: `background:${Graficas.CATEGORICA[0]}` }), 'Consumido'), el('span', el('i.leyenda-linea'), 'Pauta')),
+              g,
+              medias.some((m) => m[1] != null) &&
+                el(
+                  'table.tabla',
+                  el('thead', el('tr', el('th', 'Media diaria'), el('th', 'Registrado'), el('th', 'Pauta'))),
+                  el('tbody', medias.map(([t, v, p]) => el('tr', el('td', t), el('td', v == null ? '—' : fmt0(v) + ' g'), el('td', p == null ? '—' : fmt0(p) + ' g'))))
+                ),
+              Graficas.tabla(
+                ['Día', 'Kcal', 'Prot.', 'Hidr.', 'Grasas', 'Pauta'],
+                dias
+                  .map((f, i) => [fechaCorta(f), kcalDia[i] == null ? '—' : fmt0(kcalDia[i]), ...MACROS.map(([k]) => ((diario[f] || {})[k] == null ? '—' : fmt0(diario[f][k]))), refDia[i] == null ? '—' : fmt0(refDia[i])])
+                  .reverse()
+              ),
+            ]
+          : el('p.vacio-grafica', op.guardarDiario ? 'Registra arriba lo que comes cada día.' : 'El atleta aún no ha registrado lo que come.')
+      ),
+      op.puedePautar
+        ? tarjetaHistorialPautas(lista, (o) => `${fmt0(o.kcal)} kcal` + (o.prot != null ? ` · P ${fmt0(o.prot)} g · HC ${fmt0(o.hc || 0)} g · G ${fmt0(o.grasa || 0)} g` : ''), async (o) => {
+            if (!(await confirmar('Borrar pauta', `¿Borrar la pauta del ${fechaCorta(o.desde)}?`, 'Borrar', true))) return;
+            Object.assign(datos, await op.guardarObjetivo('nutricion', o.desde, null));
+            repintar();
+          })
+        : ''
+    );
+    if (registrados.length)
+      Graficas.barras(g, {
+        categorias: dias.map((f) => Graficas.corta(f)),
+        detalle: dias.map((f) => fechaBonita(f)),
+        series: [{ nombre: 'Consumido', color: Graficas.CATEGORICA[0], valores: kcalDia.map((v) => v || 0) }],
+        referencia: refDia,
+        nombreReferencia: 'Pauta',
+        unidad: 'kcal',
+      });
+  }
+
+  /* --- Pasos --- */
+  function pintarPasos(contenido, datos, op) {
+    const repintar = () => pintarPasos(contenido, datos, op);
+    const h = Datos.hoy();
+    const lista = (datos.objetivos || {}).pasos || [];
+    const pauta = Datos.objetivoEn(lista, h);
+    const n = S.diasDiario || 14;
+    const dias = diasAtras(n);
+    const diario = datos.diario || {};
+    const pasos = dias.map((f) => Datos.num((diario[f] || {}).pasos));
+    const ref = dias.map((f) => {
+      const o = Datos.objetivoEn(lista, f);
+      return o ? Datos.num(o.pasos) : null;
+    });
+    const reg = pasos.filter((v) => v != null);
+    const media = reg.length ? reg.reduce((a, b) => a + b, 0) / reg.length : null;
+    const cumplidos = pasos.filter((v, i) => v != null && ref[i] && v >= ref[i]).length;
+    const conRef = pasos.filter((v, i) => v != null && ref[i]).length;
+
+    const cambiar = async () => {
+      const desde = el('input', { type: 'date', value: Datos.hoy() });
+      const p = el('input', { type: 'number', inputmode: 'numeric', min: 0, step: 500, value: pauta ? pauta.pasos : 10000 });
+      const ok = await dialogo({
+        titulo: 'Pauta de pasos',
+        cuerpo: el('div.rejilla', el('label.campo', el('span', 'Desde'), desde), el('label.campo', el('span', 'Pasos al día'), p)),
+        botones: [
+          { texto: 'Cancelar', valor: false },
+          { texto: 'Guardar', valor: true, primario: true },
+        ],
+      });
+      if (!ok || !Datos.num(p.value)) return;
+      try {
+        Object.assign(datos, await op.guardarObjetivo('pasos', desde.value || Datos.hoy(), { pasos: Datos.num(p.value) }));
+        aviso('Pauta guardada');
+        repintar();
+      } catch (e) {
+        aviso(errorTexto(e), 'error');
+      }
+    };
+
+    const hoyPasos = Datos.num((diario[h] || {}).pasos);
+    const g = el('div');
+    contenido.replaceChildren(
+      pauta
+        ? el(
+            'section.tarjeta.pauta',
+            el('div.fila-sep', el('h2', 'Pauta diaria'), op.puedePautar && el('button.btn.btn-peq', { type: 'button', onclick: cambiar }, 'Cambiar pauta')),
+            el('p.cifra-grande', fmt0(pauta.pasos), el('small', ' pasos al día')),
+            hoyPasos != null && [el('p.meta', `Hoy: ${fmt0(hoyPasos)} pasos (${Math.round((hoyPasos * 100) / pauta.pasos)}%)`), barra(Math.min(100, Math.round((hoyPasos * 100) / pauta.pasos)), 'Pasos de hoy')],
+            el('p.meta', `Vigente desde el ${fechaCorta(pauta.desde)}`)
+          )
+        : el(
+            'section.tarjeta.vacio',
+            el('p', op.puedePautar ? 'Aún no has fijado una pauta de pasos.' : 'Tu entrenador aún no ha fijado una pauta de pasos.'),
+            op.puedePautar && el('button.btn.btn-primario', { type: 'button', onclick: cambiar }, 'Fijar pauta')
+          ),
+      op.guardarDiario ? tarjetaRegistroDia(datos, 'Registrar mis pasos', [['pasos', 'Pasos', 1]], op.guardarDiario, repintar) : '',
+      el('div.cabecera', selectorDias(repintar)),
+      el(
+        'section.tarjeta.tarjeta-grafica',
+        el('h2', 'Pasos por día'),
+        el('p.meta', reg.length ? `Media: ${fmt0(media)} pasos · ${reg.length} de ${n} días registrados` + (conRef ? ` · pauta cumplida ${cumplidos} de ${conRef} días` : '') : `Sin registros en los últimos ${n} días.`),
+        reg.length
+          ? [
+              el('div.leyenda', el('span', el('i', { style: `background:${Graficas.CATEGORICA[2]}` }), 'Pasos'), el('span', el('i.leyenda-linea'), 'Pauta')),
+              g,
+              Graficas.tabla(['Día', 'Pasos', 'Pauta'], dias.map((f, i) => [fechaCorta(f), pasos[i] == null ? '—' : fmt0(pasos[i]), ref[i] == null ? '—' : fmt0(ref[i])]).reverse()),
+            ]
+          : el('p.vacio-grafica', op.guardarDiario ? 'Registra arriba tus pasos cada día (los ves en la app del móvil o del reloj).' : 'El atleta aún no ha registrado sus pasos.')
+      ),
+      op.puedePautar
+        ? tarjetaHistorialPautas(lista, (o) => `${fmt0(o.pasos)} pasos`, async (o) => {
+            if (!(await confirmar('Borrar pauta', `¿Borrar la pauta del ${fechaCorta(o.desde)}?`, 'Borrar', true))) return;
+            Object.assign(datos, await op.guardarObjetivo('pasos', o.desde, null));
+            repintar();
+          })
+        : ''
+    );
+    if (reg.length)
+      Graficas.barras(g, {
+        categorias: dias.map((f) => Graficas.corta(f)),
+        detalle: dias.map((f) => fechaBonita(f)),
+        series: [{ nombre: 'Pasos', color: Graficas.CATEGORICA[2], valores: pasos.map((v) => v || 0) }],
+        referencia: ref,
+        nombreReferencia: 'Pauta',
+        unidad: 'pasos',
+      });
+  }
+
   /** Diálogo para añadir o editar una medición. Devuelve { id, medida } (medida null = borrar) o null. */
   async function dialogoMedida(m) {
     const x = m ? JSON.parse(JSON.stringify(m)) : { fecha: Datos.hoy(), peso: null, pliegues: {} };
@@ -1605,6 +1978,8 @@
       [
         ['#/', 'Calendario', 'calendario'],
         ['#/microciclo', 'Microciclo', 'microciclo'],
+        ['#/alimentacion', 'Alimentación', 'alimentacion'],
+        ['#/pasos', 'Pasos', 'pasos'],
         ['#/evolucion', 'Evolución', 'evolucion'],
       ],
       activa
@@ -1710,6 +2085,17 @@
     // En el móvil, la fila arranca en el día de hoy
     const hoyEl = $('#dia-hoy', fila);
     if (hoyEl) requestAnimationFrame(() => (fila.scrollLeft = Math.max(0, hoyEl.offsetLeft - fila.offsetLeft - 8)));
+  }
+
+  async function vistaDiarioAtleta(vista) {
+    cargando();
+    const d = await refrescarAtleta();
+    const contenido = el('div');
+    app.replaceChildren(pestanasAtleta(vista), avisoModo() || '', el('h1.titulo-blanco', vista === 'pasos' ? 'Pasos' : 'Alimentación'), contenido);
+    (vista === 'pasos' ? pintarPasos : pintarAlimentacion)(contenido, d, {
+      puedePautar: false,
+      guardarDiario: (fecha, valores) => Datos.guardarDiario(S.sesion, fecha, valores),
+    });
   }
 
   async function vistaEvolucionAtleta(detalle) {
