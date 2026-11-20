@@ -581,3 +581,37 @@ img.avatar { object-fit: cover; }
   .readiness-op .cara svg { width: 32px; height: 32px; }
   .ej-resumen { gap: 10px; padding: 12px; }
 }
+
+/* ================= Introducción interactiva (antes de entrar) ================= */
+body.en-acceso .barra { display: none; }
+body.en-acceso main { padding-top: 0; }
+.intro { position: relative; height: 290vh; width: 100vw; margin-left: calc(50% - 50vw); }
+.intro-escena { position: sticky; top: 0; height: 100vh; height: 100svh; display: grid; place-items: center; overflow: hidden; }
+.intro-logo { display: grid; justify-items: center; gap: 1.2vh; width: min(560px, 90vw); }
+.intro-palabra { font-family: var(--ancha); font-stretch: 125%; font-weight: 900; line-height: 0.9; color: #000; will-change: transform, opacity; }
+.intro-palabra-1 { font-size: clamp(2.2rem, 11vw, 4.2rem); }
+.intro-palabra-2 { font-size: clamp(2.5rem, 12.5vw, 4.9rem); }
+.intro-firma { justify-self: end; margin-right: 5%; font-size: clamp(1rem, 4.4vw, 1.5rem); margin-top: -0.6vh; will-change: transform, opacity; }
+.intro-pista-caja { width: 100%; will-change: transform, opacity; transform-origin: 50% 50%; }
+.intro-pista { display: block; width: 100%; height: auto; overflow: visible; }
+.intro-calle { fill: none; stroke: #0b0b0b; stroke-width: 3.2; stroke-dasharray: 1; stroke-dashoffset: 1; animation: dibujar-calle 1.4s cubic-bezier(.6,.05,.3,1) forwards; }
+@keyframes dibujar-calle { to { stroke-dashoffset: 0; } }
+.intro-corredor { fill: #fff; stroke: #0b0b0b; stroke-width: 2.4; }
+.intro-estela { fill: #fff; opacity: 0.35; }
+.intro-lema { position: absolute; left: 0; right: 0; top: 58%; margin: 0; padding: 0 16px; display: grid; justify-items: center; text-align: center; opacity: 0; pointer-events: none;
+  font-family: var(--ancha); font-stretch: 125%; font-weight: 900; line-height: 1; font-size: clamp(1.9rem, 9.5vw, 4.4rem); letter-spacing: -0.01em; color: #000; will-change: transform, opacity; }
+.intro-lema .rojo { color: var(--acento); }
+.intro-desliza { position: absolute; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: grid; justify-items: center; gap: 6px; font-weight: 800; font-size: 0.8rem; letter-spacing: .2em; text-transform: uppercase; color: var(--tinta-suave); }
+.intro-flecha { width: 14px; height: 14px; border-right: 3px solid var(--acento); border-bottom: 3px solid var(--acento); transform: rotate(45deg); animation: rebote 1.6s ease-in-out infinite; }
+@keyframes rebote { 0%, 100% { translate: 0 0; } 50% { translate: 0 8px; } }
+.intro-saltar { position: absolute; top: max(14px, env(safe-area-inset-top)); right: 14px; font: inherit; font-size: 0.85rem; font-weight: 700; background: transparent; border: 1.5px solid rgba(0,0,0,.25); color: var(--tinta); border-radius: 99px; padding: 6px 14px; cursor: pointer; }
+.intro-saltar:hover { border-color: var(--tinta); }
+.acceso-tras-intro { margin-top: 0; padding-bottom: 30vh; }
+.titulo-acceso { text-align: center; font-family: var(--ancha); font-stretch: 125%; font-weight: 900; text-transform: uppercase; font-size: 1.3rem; }
+
+/* Sin animaciones: todo visible y estático */
+.intro-estatica { height: auto; }
+.intro-estatica .intro-escena { position: static; height: auto; padding: 40px 0 34px; gap: 22px; }
+.intro-estatica .intro-lema { position: static; opacity: 1; font-size: clamp(1.5rem, 7vw, 2.6rem); }
+.intro-estatica .intro-desliza, .intro-estatica .intro-saltar { display: none; }
+.intro-estatica .intro-calle { animation: none; stroke-dashoffset: 0; }

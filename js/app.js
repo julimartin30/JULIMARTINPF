@@ -232,20 +232,11 @@
       error,
       el('button.btn.btn-primario.btn-grande', { type: 'submit' }, 'Entrar')
     );
-    app.replaceChildren(
-      el(
-        'div.acceso',
-        el('h1.solo-lector', 'TRACKME Fitness'),
-        el(
-          'div.logo-marca',
-          { role: 'img', 'aria-label': 'TRACKME Fitness by Julimartin' },
-          el('span.palabra.palabra-1', { 'aria-hidden': 'true' }, 'FITNESS'),
-          el('img.pista-grande', { src: 'assets/pista.svg', alt: '', width: 400, height: 140 }),
-          el('span.palabra.palabra-2', { 'aria-hidden': 'true' }, 'TRACKME'),
-          el('span.firma', { 'aria-hidden': 'true' }, 'by Julimartin')
-        ),
-        el('p.lema', 'Tu planificación, ejercicio a ejercicio.'),
-        el('div.tarjeta', form),
+    const acceso = el(
+      'div.acceso.acceso-tras-intro',
+      { id: 'acceso' },
+      el('h2.titulo-acceso', 'Entra en tu cuenta'),
+      el('div.tarjeta', form),
         !hayEntrenador &&
           el(
             'div.tarjeta.primera-vez',
@@ -253,12 +244,19 @@
             el('p', 'Todavía no hay ningún entrenador. Crea tu cuenta para empezar a planificar.'),
             el('button.btn.btn-oscuro', { type: 'button', onclick: pantallaCrearEntrenador }, 'Crear cuenta de entrenador')
           )
-      )
     );
-    usuario.focus();
+    document.body.classList.add('en-acceso');
+    window.scrollTo(0, 0);
+    app.replaceChildren(
+      el('h1.solo-lector', 'TRACKME Fitness'),
+      Intro.crear({ irAlAcceso: () => acceso.scrollIntoView({ behavior: 'smooth', block: 'center' }) }),
+      acceso
+    );
   }
 
   function pantallaCrearEntrenador() {
+    document.body.classList.remove('en-acceso');
+    window.scrollTo(0, 0);
     const error = el('div.nota.nota-error', { hidden: true, role: 'alert' });
     const nombre = el('input', { required: true, autocomplete: 'name' });
     const usuario = el('input', { required: true, autocapitalize: 'none', autocomplete: 'username', pattern: '[A-Za-z0-9._\\-]{3,}', title: 'Al menos 3 caracteres: letras, números, punto, guion' });
@@ -309,6 +307,7 @@
   }
 
   async function iniciar(s) {
+    document.body.classList.remove('en-acceso');
     S.sesion = s;
     S.atletas = {};
     if (s.rol === 'atleta') {

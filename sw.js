@@ -1,5 +1,5 @@
 /* Permite abrir la app sin cobertura (tras haberla abierto una vez con conexión). */
-const CACHE = 'trackme-v3';
+const CACHE = 'trackme-v4';
 const BASE = [
   './',
   'index.html',
@@ -10,6 +10,7 @@ const BASE = [
   'js/figuras.js',
   'js/graficas.js',
   'js/rueda.js',
+  'js/intro.js',
   'js/datos.js',
   'js/app.js',
   'assets/icono.svg',

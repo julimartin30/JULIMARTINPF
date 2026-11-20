@@ -28,6 +28,8 @@ Si se edita una sesión diseñada, se actualizan también los días en que estab
 
 Funciona entera en **GitHub Pages**: no hace falta servidor ni base de datos. Los datos se guardan **cifrados** en el propio repositorio.
 
+**Pantalla de inicio:** antes de entrar aparece la pista del logo con un corredor dando vueltas. Al deslizar hacia abajo aparece el lema «REPEAT IT, CONSISTENTLY.» y, al seguir, las cajas de usuario y contraseña (también hay un botón «Ir al acceso»). Con «reducir movimiento» activado en el móvil se muestra todo estático.
+
 ## Cómo se calcula el cumplimiento
 
 Cada serie pautada vale de 0 a 100 %:
