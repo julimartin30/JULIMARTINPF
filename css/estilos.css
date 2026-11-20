@@ -429,3 +429,24 @@ pre.credenciales { white-space: pre-wrap; background: var(--gris); border-radius
   .pestanas { gap: 4px; -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); padding-right: 24px; }
   .pestana { padding: 7px 11px; font-size: 0.9rem; }
 }
+
+/* Rueda giratoria */
+.campo-rueda { display: grid; justify-items: center; gap: 6px; margin-bottom: 8px; }
+.etq-rueda { justify-self: start; font-size: 0.86rem; font-weight: 700; color: var(--tinta-suave); }
+.rueda { display: grid; justify-items: center; gap: 8px; width: 100%; }
+.rueda-dial { position: relative; width: min(240px, 72vw); aspect-ratio: 1; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; border-radius: 50%; }
+.rueda-dial.girando { cursor: grabbing; }
+.rueda-dial:focus-visible { outline: 3px solid rgba(232, 87, 42, 0.45); outline-offset: 4px; }
+.rueda-dial svg { display: block; width: 100%; height: 100%; }
+.rueda-aro { fill: #f3f4f7; stroke: #dfe3ea; stroke-width: 2; }
+.rueda-muesca { stroke: #a9b1c0; stroke-width: 2; stroke-linecap: round; }
+.rueda-muesca.larga { stroke: var(--tinta); stroke-width: 3; }
+.rueda-tirador { fill: var(--acento); }
+.rueda-centro { fill: #fff; stroke: #dfe3ea; stroke-width: 2; }
+.rueda-indicador { fill: var(--acento); }
+.rueda-valor { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
+.rueda-valor b { font-size: 2rem; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
+.rueda-valor small { font-size: 0.85rem; font-weight: 700; color: var(--tinta-suave); }
+.rueda-ayuda { font-size: 0.82rem; color: var(--tinta-suave); text-align: center; margin: 0; }
+.rueda-botones { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.rueda-botones .btn { min-width: 64px; }

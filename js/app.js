@@ -1376,9 +1376,25 @@
   }
 
   /** Tarjeta "Registrar día" del atleta. `campos`: [[clave, etiqueta, paso]]. */
+  /**
+   * `campos`: [[clave, etiqueta, paso, opciones]]. Con opciones.rueda se elige con la rueda giratoria
+   * (opciones.inicial(fecha) da el valor de partida cuando ese día no tiene registro).
+   */
   function tarjetaRegistroDia(datos, titulo, campos, guardarDiario, alGuardar, completar) {
     const fecha = el('input', { type: 'date', value: Datos.hoy(), max: Datos.hoy() });
-    const entradas = campos.map(([k, t, paso]) => {
+    const entradas = campos.map(([k, t, paso, opc]) => {
+      if (opc && opc.rueda) {
+        const rueda = Rueda.crear({ valor: 0, paso, etiqueta: t, unidad: opc.unidad || '' });
+        const i = {
+          get value() {
+            return String(rueda.valor);
+          },
+          set value(x) {
+            rueda.set(x === '' || x == null ? opc.inicial(fecha.value) : x);
+          },
+        };
+        return [k, i, el('div.campo-rueda', el('span.etq-rueda', t), rueda.el)];
+      }
       const i = el('input', { type: 'number', inputmode: paso < 1 ? 'decimal' : 'numeric', min: 0, step: paso });
       i.dataset.k = k;
       return [k, i, el('label.campo', el('span', t), i)];
@@ -1643,10 +1659,15 @@
 
     const cambiar = async () => {
       const desde = el('input', { type: 'date', value: Datos.hoy() });
-      const p = el('input', { type: 'number', inputmode: 'numeric', min: 0, step: 500, value: pauta ? pauta.pasos : 10000 });
+      const rueda = Rueda.crear({ valor: pauta ? pauta.pasos : 10000, paso: 100, etiqueta: 'Pasos al día', unidad: 'pasos' });
+      const p = {
+        get value() {
+          return String(rueda.valor);
+        },
+      };
       const ok = await dialogo({
         titulo: 'Pauta de pasos',
-        cuerpo: el('div.rejilla', el('label.campo', el('span', 'Desde'), desde), el('label.campo', el('span', 'Pasos al día'), p)),
+        cuerpo: [el('label.campo', el('span', 'Desde'), desde), el('div.campo-rueda', el('span.etq-rueda', 'Pasos al día'), rueda.el)],
         botones: [
           { texto: 'Cancelar', valor: false },
           { texto: 'Guardar', valor: true, primario: true },
@@ -1662,6 +1683,15 @@
       }
     };
 
+    const valorInicialPasos = (f) => {
+      const previo = Object.keys(diario)
+        .filter((x) => x < f && Datos.num(diario[x].pasos))
+        .sort()
+        .pop();
+      if (previo) return Datos.num(diario[previo].pasos);
+      const o = Datos.objetivoEn(lista, f);
+      return o ? Datos.num(o.pasos) : 0;
+    };
     const hoyPasos = Datos.num((diario[h] || {}).pasos);
     const g = el('div');
     contenido.replaceChildren(
@@ -1678,7 +1708,18 @@
             el('p', op.puedePautar ? 'Aún no has fijado una pauta de pasos.' : 'Tu entrenador aún no ha fijado una pauta de pasos.'),
             op.puedePautar && el('button.btn.btn-primario', { type: 'button', onclick: cambiar }, 'Fijar pauta')
           ),
-      op.guardarDiario ? tarjetaRegistroDia(datos, 'Registrar mis pasos', [['pasos', 'Pasos', 1]], op.guardarDiario, repintar) : '',
+      op.guardarDiario
+        ? tarjetaRegistroDia(
+            datos,
+            'Registrar mis pasos',
+            [['pasos', 'Pasos del día', 100, { rueda: true, unidad: 'pasos', inicial: (f) => valorInicialPasos(f) }]],
+            op.guardarDiario,
+            repintar,
+            (v) => {
+              if (!v.pasos) v.pasos = null;
+            }
+          )
+        : '',
       el('div.cabecera', selectorDias(repintar)),
       el(
         'section.tarjeta.tarjeta-grafica',

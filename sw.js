@@ -1,5 +1,5 @@
 /* Permite abrir la app sin cobertura (tras haberla abierto una vez con conexión). */
-const CACHE = 'entreno-v7';
+const CACHE = 'entreno-v8';
 const BASE = [
   './',
   'index.html',
@@ -9,6 +9,7 @@ const BASE = [
   'js/github.js',
   'js/figuras.js',
   'js/graficas.js',
+  'js/rueda.js',
   'js/datos.js',
   'js/app.js',
   'assets/icono.svg',
