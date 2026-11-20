@@ -941,7 +941,7 @@
         el('p.meta', `${cs.hechas} de ${cs.series} series registradas`),
         reg && reg.readiness != null && el('p.readiness-rev', el('span.cara', { html: carita(READINESS[reg.readiness][2], READINESS[reg.readiness][1]) }), el('span', el('b', 'Llegó a la sesión: '), `${reg.readiness}/5 · ${READINESS[reg.readiness][0]}`)),
         reg && reg.rpe && el('p', el('b', 'Esfuerzo percibido: '), reg.rpe + ' / 10'),
-        reg && reg.comentario && el('div.nota.nota-info', el('b', 'Comentario: '), reg.comentario),
+        reg && reg.comentario && el('div.nota.nota-info', el('b', 'Observaciones: '), reg.comentario),
         reg && reg.completada && el('p.meta', 'Terminada el ' + new Date(reg.completada).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })),
         s.notas && el('p.meta', 'Indicaciones: ' + s.notas)
       ),
@@ -2468,7 +2468,7 @@
     const s = (d.sesiones || []).find((x) => x.id === sid);
     if (!s) return ir('#/calendario');
     const volver = S.volverAtleta || '#/calendario';
-    const reg = JSON.parse(JSON.stringify(d.registros[sid] || { items: {}, rpe: null, comentario: '', completada: null }));
+    const reg = JSON.parse(JSON.stringify(d.registros[sid] || { items: {}, comentario: '', completada: null }));
     reg.items = reg.items || {};
     const estadoGuardado = el('span.guardado', { role: 'status', 'aria-live': 'polite' });
     const resumen = el('div');
@@ -2604,15 +2604,6 @@
       return det;
     };
 
-    const rpe = el(
-      'select',
-      { onchange: (e) => ((reg.rpe = Datos.num(e.target.value)), guardar()) },
-      el('option', { value: '' }, '—'),
-      Array.from({ length: 10 }, (_, i) =>
-        el('option', { value: i + 1, selected: reg.rpe === i + 1 }, `${i + 1} · ${['Muy suave', 'Suave', 'Suave', 'Moderado', 'Moderado', 'Algo duro', 'Duro', 'Muy duro', 'Durísimo', 'Máximo'][i]}`)
-      )
-    );
-
     const terminar = el(
       'button.btn.btn-primario.btn-grande',
       {
@@ -2654,8 +2645,7 @@
       el(
         'div.tarjeta',
         el('h2', 'Al terminar'),
-        el('label.campo', el('span', '¿Cómo de dura ha sido? (esfuerzo percibido)'), rpe),
-        el('label.campo', el('span', 'Comentario para tu entrenador'), el('textarea', { rows: 3, oninput: (e) => ((reg.comentario = e.target.value), guardar()) }, reg.comentario || '')),
+        el('label.campo', el('span', 'Observaciones para tu entrenador'), el('textarea', { rows: 3, oninput: (e) => ((reg.comentario = e.target.value), guardar()) }, reg.comentario || '')),
         terminar
       )
     );
