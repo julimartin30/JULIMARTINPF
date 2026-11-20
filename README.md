@@ -6,7 +6,7 @@ App web (instalable en el móvil) para que un entrenador planifique las sesiones
 
 - **Entrenador:** ve una tarjeta por atleta (con su foto). Al pulsarla se abre su ficha:
   - **Perfil:** el mismo perfil que ve el atleta (con su evolución debajo), también editable.
-  - **Sesiones:** diseña las sesiones de ese atleta (título, ejercicios, series, repeticiones, kilos, kilómetros y zona de intensidad, descansos e indicaciones). Se pueden duplicar o copiar a otro atleta.
+  - **Sesiones:** diseña las sesiones de ese atleta: título, ejercicios y, por cada serie, un rango de repeticiones (p. ej. 8–10), kilos y RIR (repeticiones en reserva) como medida de intensidad; o kilómetros y zona en la carrera. También descansos e indicaciones. Se pueden duplicar o copiar a otro atleta.
   - **Planificación:** calendario mensual. Pulsando un día se añaden una o varias de las sesiones diseñadas (y se pueden repetir varias semanas). Cada sesión aparece en el día con un color según lo que ha cumplido el atleta; al pulsarla se ve serie a serie lo pautado frente a lo realizado.
   - **Alimentación:** pautas las kcal diarias con su reparto de macros (proteínas, hidratos y grasas en gramos; la app calcula el % de las kcal y los g/kg con su último peso) e indicaciones. Ves lo que registra el atleta día a día frente a la pauta.
   - **Pasos:** pautas los pasos diarios (con la misma rueda) y ves los que registra el atleta y cuántos días la cumple.
@@ -14,7 +14,9 @@ App web (instalable en el móvil) para que un entrenador planifique las sesiones
 Las pautas de alimentación y pasos se guardan con la fecha desde la que rigen, así queda el historial de cambios.
 - **Atleta:** cinco pestañas:
   - **Mi perfil** (se abre al entrar): foto, altura, peso (de la última medición), IMC, edad y deporte; objetivos a corto, medio y largo plazo; y consideraciones (lesiones, alergias, horarios, material…). Lo pueden editar el atleta y el entrenador. Debajo, la **evolución** (ver más abajo).
-  - **Calendario:** vista mensual con toda su preparación. Arriba, el resumen de hoy: la sesión que le toca, la pauta de alimentación (kcal y macros) y la de pasos, con lo que lleva registrado, más las sesiones que tenga sin registrar de la semana. Pulsando una sesión ve los ejercicios y anota lo que ha hecho (si una serie la ha hecho tal cual, basta con pulsar ✓).
+  - **Calendario:** vista mensual con toda su preparación. Arriba, el resumen de hoy: la sesión que le toca, la pauta de alimentación (kcal y macros) y la de pasos, con lo que lleva registrado, más las sesiones que tenga sin registrar de la semana. Pulsando una sesión se abre el registro:
+    - Al empezar, indica su **readiness** (0–5, con caritas de colores): cómo de preparado y motivado llega.
+    - Cada ejercicio es una tarjeta plegable. Al desplegarla ve la ilustración y anota, por serie, repeticiones, kilos y RIR. Al final pulsa **«Ejercicio completado»**: la tarjeta se pliega con ✓ y se abre la siguiente.
   - **Microciclo:** la semana en horizontal, un día por tarjeta, con el título de cada sesión, la lista de sus ejercicios y su estado. En el móvil se desliza de lado y empieza en el día de hoy.
   - **Alimentación:** su pauta de kcal y macros, y un formulario para apuntar lo que ha comido cada día (kcal y, si quiere, macros), con la gráfica de los últimos días frente a la pauta.
   - **Pasos:** su pauta de pasos y una rueda para apuntar los pasos de cada día (girar a la derecha suma 100 por muesca, a la izquierda resta; una vuelta son 6.000; también hay botones de ±100 y ±1.000). Parte de los últimos pasos registrados o de la pauta. Con la gráfica frente a la pauta.
@@ -30,7 +32,7 @@ Funciona entera en **GitHub Pages**: no hace falta servidor ni base de datos. Lo
 
 Cada serie pautada vale de 0 a 100 %:
 
-- Repeticiones: hechas ÷ pautadas (máximo 100 %).
+- Repeticiones: hechas ÷ pautadas (con rango, ÷ el mínimo del rango; máximo 100 %). El RIR no cuenta para el porcentaje: el entrenador lo ve serie a serie.
 - Kilos (si se pautaron): usados ÷ pautados (máximo 100 %).
 - Se multiplican: 10 repeticiones de 10 con 60 de 60 kg = 100 %; 7 de 10 con 60 kg = 70 %; 10 de 10 con 50 de 60 kg = 83 %.
 

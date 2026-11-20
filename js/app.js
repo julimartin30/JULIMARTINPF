@@ -41,12 +41,15 @@
       el('div.medidor-relleno.tono-' + colorPct(pct), { style: `width:${pct || 0}%` })
     );
   }
-  /** Texto de una serie (pautada o realizada): «10 reps · 60 kg», «30 s», «5 km · Z2». */
+  const hay = (v) => v != null && v !== '';
+  /** Repeticiones de una serie: «10» o, con rango, «8–10». */
+  const textoReps = (x) => (hay(x.reps) ? x.reps : '—') + (hay(x.repsMax) && x.repsMax !== x.reps ? '–' + x.repsMax : '');
+  /** Texto de una serie (pautada o realizada): «8–10 reps · 60 kg · RIR 2», «30 s», «5 km · Z2». */
   const textoSerie = (it, x) => {
     if (!x) return '—';
-    if (it.tipo === 'km') return `${x.km != null && x.km !== '' ? Graficas.fmt(+x.km, 2) : '—'} km${x.zona ? ' · ' + x.zona : ''}`;
+    if (it.tipo === 'km') return `${hay(x.km) ? Graficas.fmt(+x.km, 2) : '—'} km${x.zona ? ' · ' + x.zona : ''}`;
     const u = it.tipo === 'seg' ? ' s' : ' reps';
-    return `${x.reps != null && x.reps !== '' ? x.reps : '—'}${u}${x.kg != null && x.kg !== '' ? ' · ' + x.kg + ' kg' : ''}`;
+    return `${textoReps(x)}${u}${hay(x.kg) ? ' · ' + x.kg + ' kg' : ''}${hay(x.rir) ? ' · RIR ' + x.rir : ''}`;
   };
   const textoObjetivo = (it) => {
     const series = it.series || [];
@@ -56,8 +59,8 @@
       return series.length === 1 ? textoSerie(it, series[0]) : `${Graficas.fmt(total, 2)} km en ${series.length} tramos (${series.map((x) => x.zona || '—').join(', ')})`;
     }
     const unidad = it.tipo === 'seg' ? ' s' : '';
-    const iguales = series.every((x) => x.reps === series[0].reps && x.kg === series[0].kg);
-    const uno = (x) => `${x.reps || '—'}${unidad}${x.kg ? ' · ' + x.kg + ' kg' : ''}`;
+    const iguales = series.every((x) => x.reps === series[0].reps && x.repsMax === series[0].repsMax && x.kg === series[0].kg && x.rir === series[0].rir);
+    const uno = (x) => `${textoReps(x)}${unidad}${hay(x.kg) ? ' · ' + x.kg + ' kg' : ''}${hay(x.rir) ? ' · RIR ' + x.rir : ''}`;
     return iguales ? `${series.length} × ${uno(series[0])}` : series.map(uno).join(' / ');
   };
   const sugerirPassword = () => {
@@ -918,7 +921,11 @@
       const extra = r && r.series ? r.series.slice(it.series.length).filter((x) => x && (x.reps || x.kg || x.km)) : [];
       return el(
         'div.tarjeta.revision-ej',
-        el('div.revision-cab', Figuras.ilustracion(def, { compacto: true }), el('div', el('h3', def.nombre), el('span.meta', 'Pautado: ' + textoObjetivo(it)), it.nota && el('span.meta', 'Tu indicación: ' + it.nota))),
+        el(
+          'div.revision-cab',
+          Figuras.ilustracion(def, { compacto: true }),
+          el('div', el('h3', def.nombre, r && r.completo ? el('span.check-hecho.check-peq', { title: 'Completado por el atleta', 'aria-label': 'Completado por el atleta' }, '✓') : ''), el('span.meta', 'Pautado: ' + textoObjetivo(it)), it.nota && el('span.meta', 'Tu indicación: ' + it.nota))
+        ),
         el('table.tabla', el('thead', el('tr', el('th', 'Serie'), el('th', 'Pautado'), el('th', 'Realizado'), el('th', ''))), el('tbody', filas)),
         extra.length > 0 && el('p.ayuda', `Hizo ${extra.length} serie(s) extra: ` + extra.map((x) => textoSerie(it, x)).join(', ')),
         r && r.nota && el('div.nota.nota-info', el('b', 'Comentario del atleta: '), r.nota)
@@ -932,6 +939,7 @@
         el('div.fila-sep', el('b', 'Cumplimiento'), chipEstado(cs)),
         barra(cs.pct || 0),
         el('p.meta', `${cs.hechas} de ${cs.series} series registradas`),
+        reg && reg.readiness != null && el('p.readiness-rev', el('span.cara', { html: carita(READINESS[reg.readiness][2], READINESS[reg.readiness][1]) }), el('span', el('b', 'Llegó a la sesión: '), `${reg.readiness}/5 · ${READINESS[reg.readiness][0]}`)),
         reg && reg.rpe && el('p', el('b', 'Esfuerzo percibido: '), reg.rpe + ' / 10'),
         reg && reg.comentario && el('div.nota.nota-info', el('b', 'Comentario: '), reg.comentario),
         reg && reg.completada && el('p.meta', 'Terminada el ' + new Date(reg.completada).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })),
@@ -987,7 +995,12 @@
   /* ---------- Editor: diseñar una sesión (plantilla) o editar un día concreto (instancia) ---------- */
   function nuevaSerie(tipo, base) {
     if (tipo === 'km') return { km: (base && base.km) || 5, zona: (base && base.zona) || 'Z2' };
-    return { reps: base && base.reps != null ? base.reps : tipo === 'seg' ? 30 : 10, kg: base ? base.kg ?? null : null };
+    return {
+      reps: base && base.reps != null ? base.reps : tipo === 'seg' ? 30 : 8,
+      repsMax: base ? base.repsMax ?? null : tipo === 'seg' ? null : 10,
+      kg: base ? base.kg ?? null : null,
+      rir: base ? base.rir ?? null : tipo === 'seg' ? null : 2,
+    };
   }
 
   async function vistaEditor(idAtleta, modo, xid) {
@@ -1020,9 +1033,11 @@
       const pintarSeries = () => {
         const km = it.tipo === 'km';
         filas.replaceChildren(
-          el('div.serie-ed.cab', el('span', '#'), el('span', km ? 'Km' : it.tipo === 'seg' ? 'Segundos' : 'Repeticiones'), el('span', km ? 'Intensidad' : 'Kg'), el('span')),
+          km
+            ? el('div.serie-ed.cab', el('span', '#'), el('span', 'Km'), el('span', 'Intensidad'), el('span'))
+            : el('div.serie-ed.serie-fuerza.cab', el('span', '#'), el('span', it.tipo === 'seg' ? 'Segundos (mín–máx)' : 'Repeticiones (mín–máx)'), el('span', 'Kg'), el('span', { title: 'Repeticiones en reserva' }, 'RIR'), el('span')),
           ...it.series.map((se, i) =>
-            el(
+            km ? el(
               'div.serie-ed',
               el('span.n', i + 1),
               km
@@ -1032,8 +1047,21 @@
                 ? el('select', { 'aria-label': `Serie ${i + 1}: zona de intensidad`, onchange: (e) => (se.zona = e.target.value) }, Datos.ZONAS.map((z) => el('option', { value: z, selected: se.zona === z }, Datos.NOMBRES_ZONA[z])))
                 : el('input', { type: 'number', inputmode: 'decimal', min: 0, step: 0.5, value: se.kg ?? '', placeholder: '—', 'aria-label': `Serie ${i + 1}: kilos`, oninput: (e) => (se.kg = Datos.num(e.target.value)) }),
               el('button.btn.btn-icono.btn-peq', { type: 'button', 'aria-label': 'Quitar serie ' + (i + 1), disabled: it.series.length < 2, onclick: () => (it.series.splice(i, 1), pintarSeries()) }, '✕')
+            ) : el(
+              'div.serie-ed.serie-fuerza',
+              el('span.n', i + 1),
+              el(
+                'span.rango',
+                el('input', { type: 'number', inputmode: 'numeric', min: 0, value: se.reps ?? '', 'aria-label': `Serie ${i + 1}: ${it.tipo === 'seg' ? 'segundos' : 'repeticiones'} mínimas`, oninput: (e) => (se.reps = Datos.num(e.target.value)) }),
+                el('span', { 'aria-hidden': 'true' }, '–'),
+                el('input', { type: 'number', inputmode: 'numeric', min: 0, value: se.repsMax ?? '', placeholder: '—', 'aria-label': `Serie ${i + 1}: ${it.tipo === 'seg' ? 'segundos' : 'repeticiones'} máximas (opcional)`, oninput: (e) => (se.repsMax = Datos.num(e.target.value)) })
+              ),
+              el('input', { type: 'number', inputmode: 'decimal', min: 0, step: 0.5, value: se.kg ?? '', placeholder: '—', 'aria-label': `Serie ${i + 1}: kilos`, oninput: (e) => (se.kg = Datos.num(e.target.value)) }),
+              el('input', { type: 'number', inputmode: 'numeric', min: 0, max: 10, value: se.rir ?? '', placeholder: '—', 'aria-label': `Serie ${i + 1}: RIR (repeticiones en reserva)`, oninput: (e) => (se.rir = Datos.num(e.target.value)) }),
+              el('button.btn.btn-icono.btn-peq', { type: 'button', 'aria-label': 'Quitar serie ' + (i + 1), disabled: it.series.length < 2, onclick: () => (it.series.splice(i, 1), pintarSeries()) }, '✕')
             )
           ),
+          !km && el('p.ayuda', 'RIR: repeticiones en reserva al acabar la serie (0 = al fallo, 2 = podrías hacer 2 más). Deja el máximo vacío si no quieres rango.'),
           el('button.btn.btn-peq', { type: 'button', onclick: () => (it.series.push(nuevaSerie(it.tipo, it.series[it.series.length - 1])), pintarSeries()) }, km ? '+ Tramo' : '+ Serie')
         );
       };
@@ -1113,7 +1141,12 @@
       if (!s.items.length) return aviso('Añade al menos un ejercicio.', 'error');
       btn.disabled = true;
       btn.textContent = 'Guardando…';
-      const items = s.items.map((it) => ({ ...it, series: it.series.map((x) => (it.tipo === 'km' ? { km: x.km, zona: x.zona || 'Z2' } : { reps: x.reps, kg: x.kg })) }));
+      const items = s.items.map((it) => ({
+        ...it,
+        series: it.series.map((x) =>
+          it.tipo === 'km' ? { km: x.km, zona: x.zona || 'Z2' } : { reps: x.reps, repsMax: x.repsMax != null && x.repsMax > x.reps ? x.repsMax : null, kg: x.kg, rir: x.rir ?? null }
+        ),
+      }));
       const limpia = { titulo: (s.titulo || '').trim(), notas: (s.notas || '').trim(), items };
       try {
         if (esPlantilla) {
@@ -2384,6 +2417,52 @@
     );
   }
 
+  /* --- Readiness: cómo de preparado/motivado llega el atleta (0-5) --- */
+  const READINESS = [
+    ['Nada preparado', '#b3261e', -1],
+    ['Muy bajo', '#e0592a', -0.6],
+    ['Bajo', '#eda100', -0.25],
+    ['Normal', '#a8a400', 0.1],
+    ['Bien', '#3f9b45', 0.6],
+    ['Muy motivado', '#1b7f4b', 1],
+  ];
+  /** Carita SVG: `curva` de -1 (triste) a 1 (sonriente). */
+  function carita(curva, color) {
+    const y = 30;
+    const c = y + curva * 9;
+    return `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="21" fill="${color}"/><circle cx="17" cy="19" r="3" fill="#fff"/><circle cx="31" cy="19" r="3" fill="#fff"/><path d="M14 ${y} Q24 ${c} 34 ${y}" stroke="#fff" stroke-width="3.2" fill="none" stroke-linecap="round"/></svg>`;
+  }
+  function selectorReadiness(valor, alCambiar) {
+    const caja = el('div.readiness', { role: 'radiogroup', 'aria-label': 'Preparación para la sesión, de 0 a 5' });
+    const texto = el('p.readiness-texto', { 'aria-live': 'polite' });
+    const pintar = () => {
+      caja.replaceChildren(
+        ...READINESS.map(([t, color, curva], i) =>
+          el(
+            'button.readiness-op' + (valor === i ? '.elegida' : ''),
+            {
+              type: 'button',
+              role: 'radio',
+              'aria-checked': String(valor === i),
+              'aria-label': `${i}: ${t}`,
+              style: `--color:${color}`,
+              onclick: () => {
+                valor = valor === i ? null : i;
+                pintar();
+                alCambiar(valor);
+              },
+            },
+            el('span.cara', { html: carita(curva, color) }),
+            el('span.readiness-num', i)
+          )
+        )
+      );
+      texto.textContent = valor == null ? 'Toca la carita que mejor te describa.' : `${valor} · ${READINESS[valor][0]}`;
+    };
+    pintar();
+    return el('div', caja, texto);
+  }
+
   function vistaSesionAtleta(sid) {
     const d = S.sesion.datos;
     const s = (d.sesiones || []).find((x) => x.id === sid);
@@ -2397,7 +2476,12 @@
 
     const pintarResumen = () => {
       const cs = Datos.cumplimientoSesion(s, reg);
-      resumen.replaceChildren(el('div.fila-sep', el('b', 'Llevas'), el('span.pct.tono-' + colorPct(cs.pct || 0), (cs.pct || 0) + '%')), barra(cs.pct || 0), el('p.meta', `${cs.hechas} de ${cs.series} series`));
+      const hechos = s.items.filter((it) => reg.items[it.uid] && reg.items[it.uid].completo).length;
+      resumen.replaceChildren(
+        el('div.fila-sep', el('b', `${hechos} de ${s.items.length} ejercicios`), el('span.pct.tono-' + colorPct(cs.pct || 0), (cs.pct || 0) + '%')),
+        barra(cs.pct || 0),
+        el('p.meta', `${cs.hechas} de ${cs.series} series registradas`)
+      );
     };
 
     const guardar = (inmediato) => {
@@ -2414,129 +2498,110 @@
       temporizador = setTimeout(hacer, 1200);
     };
 
-    const campo = (etq, attrs) => el('label.entrada', el('small', etq), el('input', attrs));
+    const entrada = (etq, attrs) => el('label.entrada', el('small', etq), el('input', attrs));
+    const tarjetas = [];
 
+    /** Tarjeta plegable de un ejercicio. */
     const tarjetaItem = (it, idx) => {
       const def = defItem(it);
-      const r = (reg.items[it.uid] = reg.items[it.uid] || { series: [], nota: '' });
+      const r = (reg.items[it.uid] = reg.items[it.uid] || { series: [], nota: '', completo: false });
       const km = it.tipo === 'km';
-      const unidad = it.tipo === 'seg' ? 'seg' : 'reps';
-      const filas = el('div.series-atleta');
-      const pintarFilas = () => {
-        filas.replaceChildren(
-          ...it.series.map((obj, i) => {
-            const real = (r.series[i] = r.series[i] || (km ? { km: null, zona: null, hecho: false } : { reps: null, kg: null, hecho: false }));
-            const fila = el('div.serie-at');
-            const actualizarFila = () => {
-              const c = Datos.cumplimientoSerie(obj, real);
-              const algo = km ? real.km != null : real.reps != null || real.kg != null;
-              fila.classList.toggle('hecha', c >= 1);
-              fila.classList.toggle('parcial', c < 1 && algo);
-            };
-            const entradas = km
-              ? [
-                  campo('Km', {
-                    type: 'number',
-                    inputmode: 'decimal',
-                    min: 0,
-                    step: 0.1,
-                    value: real.km ?? '',
-                    placeholder: obj.km ?? '',
-                    'aria-label': `Tramo ${i + 1}, kilómetros hechos (objetivo ${obj.km || 'libre'})`,
-                    oninput: (e) => {
-                      real.km = Datos.num(e.target.value);
-                      real.hecho = real.km != null;
-                      if (real.hecho && !real.zona) {
-                        real.zona = obj.zona || 'Z2';
-                        $('select', fila).value = real.zona;
-                      }
-                      actualizarFila();
-                      guardar();
-                    },
-                  }),
-                  el(
-                    'label.entrada',
-                    el('small', 'Zona'),
-                    el(
-                      'select',
-                      { 'aria-label': `Tramo ${i + 1}, zona de intensidad`, onchange: (e) => ((real.zona = e.target.value || null), guardar()) },
-                      el('option', { value: '' }, '—'),
-                      Datos.ZONAS.map((z) => el('option', { value: z, selected: real.zona === z }, z))
-                    )
-                  ),
-                ]
-              : [
-                  campo(unidad === 'seg' ? 'Segundos' : 'Reps', {
-                    type: 'number',
-                    inputmode: 'numeric',
-                    min: 0,
-                    value: real.reps ?? '',
-                    placeholder: obj.reps ?? '',
-                    'aria-label': `Serie ${i + 1}, ${unidad === 'seg' ? 'segundos' : 'repeticiones'} hechas (objetivo ${obj.reps || 'libre'})`,
-                    oninput: (e) => {
-                      real.reps = Datos.num(e.target.value);
-                      real.hecho = real.reps != null;
-                      if (real.hecho && real.kg == null && obj.kg) {
-                        real.kg = obj.kg;
-                        $('input[data-kg]', fila).value = obj.kg;
-                      }
-                      actualizarFila();
-                      guardar();
-                    },
-                  }),
-                  campo('Kg', {
-                    type: 'number',
-                    inputmode: 'decimal',
-                    min: 0,
-                    step: 0.5,
-                    'data-kg': '',
-                    value: real.kg ?? '',
-                    placeholder: obj.kg ?? '—',
-                    'aria-label': `Serie ${i + 1}, kilos usados (objetivo ${obj.kg || 'sin peso'})`,
-                    oninput: (e) => {
-                      real.kg = Datos.num(e.target.value);
-                      actualizarFila();
-                      guardar();
-                    },
-                  }),
-                ];
-            fila.append(
-              el('span.n', { 'aria-hidden': 'true' }, i + 1),
-              el('span.obj', el('small', 'Objetivo'), textoSerie(it, obj)),
-              ...entradas,
-              el(
-                'button.btn-check',
-                {
-                  type: 'button',
-                  'aria-label': `${km ? 'Tramo' : 'Serie'} ${i + 1} hecha tal cual`,
-                  title: 'Hecha tal cual',
-                  onclick: () => {
-                    const yaHecha = Datos.cumplimientoSerie(obj, real) >= 1;
-                    if (km) Object.assign(real, yaHecha ? { km: null, zona: null, hecho: false } : { km: obj.km, zona: obj.zona, hecho: true });
-                    else Object.assign(real, yaHecha ? { reps: null, kg: null, hecho: false } : { reps: obj.reps, kg: obj.kg, hecho: true });
-                    pintarFilas();
-                    guardar();
-                  },
-                },
-                '✓'
-              )
-            );
-            actualizarFila();
-            return fila;
-          })
-        );
+      const seg = it.tipo === 'seg';
+      const det = el('details.ej-plegable');
+      const estado = el('span.ej-estado');
+      const marcarEstado = () => {
+        const n = it.series.filter((obj, i) => Datos.cumplimientoSerie(obj, r.series[i]) > 0).length;
+        det.classList.toggle('completo', !!r.completo);
+        estado.replaceChildren(r.completo ? el('span.check-hecho', { 'aria-label': 'Completado' }, '✓') : el('span.series-cont', `${n}/${it.series.length}`));
       };
-      pintarFilas();
-      return el(
-        'section.tarjeta.ej-atleta',
-        { 'aria-labelledby': 'ej-' + it.uid },
-        el('div.ej-cab', el('span.ej-num', idx + 1), el('div', el('h2', { id: 'ej-' + it.uid }, def.nombre), el('span.objetivo', textoObjetivo(it)), it.descanso && el('span.meta', 'Descanso: ' + it.descanso))),
-        Figuras.ilustracion(def),
-        it.nota && el('div.nota.nota-info', el('b', 'Indicación: '), it.nota),
-        el('details.como', el('summary', 'Cómo se hace'), fichaEjercicio(def)),
-        filas,
-        el('label.campo', el('span', 'Comentario (opcional)'), el('input', { value: r.nota || '', placeholder: km ? 'Ritmo medio, sensaciones…' : 'Molestias, sensaciones…', oninput: (e) => ((r.nota = e.target.value), guardar()) }))
+
+      const filas = it.series.map((obj, i) => {
+        const real = (r.series[i] = r.series[i] || (km ? { km: null, zona: null } : { reps: null, kg: null, rir: null }));
+        const fila = el('div.serie-at' + (km ? '.serie-km' : ''));
+        const actualizar = () => {
+          real.hecho = km ? real.km != null : real.reps != null;
+          const c = Datos.cumplimientoSerie(obj, real);
+          fila.classList.toggle('hecha', c >= 1);
+          fila.classList.toggle('parcial', c > 0 && c < 1);
+          marcarEstado();
+          guardar();
+        };
+        const campos = km
+          ? [
+              entrada('Km', { type: 'number', inputmode: 'decimal', min: 0, step: 0.1, value: real.km ?? '', placeholder: obj.km ?? '', 'aria-label': `Tramo ${i + 1}: kilómetros hechos`, oninput: (e) => ((real.km = Datos.num(e.target.value)), actualizar()) }),
+              el(
+                'label.entrada',
+                el('small', 'Zona'),
+                el('select', { 'aria-label': `Tramo ${i + 1}: zona`, onchange: (e) => ((real.zona = e.target.value || null), actualizar()) }, el('option', { value: '' }, '—'), Datos.ZONAS.map((z) => el('option', { value: z, selected: real.zona === z }, z)))
+              ),
+            ]
+          : [
+              entrada(seg ? 'Seg' : 'Reps', { type: 'number', inputmode: 'numeric', min: 0, value: real.reps ?? '', placeholder: textoReps(obj), 'aria-label': `Serie ${i + 1}: ${seg ? 'segundos' : 'repeticiones'} hechas (objetivo ${textoReps(obj)})`, oninput: (e) => ((real.reps = Datos.num(e.target.value)), actualizar()) }),
+              entrada('Kg', { type: 'number', inputmode: 'decimal', min: 0, step: 0.5, value: real.kg ?? '', placeholder: obj.kg ?? '—', 'aria-label': `Serie ${i + 1}: kilos usados (objetivo ${obj.kg || 'sin peso'})`, oninput: (e) => ((real.kg = Datos.num(e.target.value)), actualizar()) }),
+              entrada('RIR', { type: 'number', inputmode: 'numeric', min: 0, max: 10, value: real.rir ?? '', placeholder: obj.rir ?? '—', 'aria-label': `Serie ${i + 1}: repeticiones en reserva (objetivo ${obj.rir ?? 'libre'})`, oninput: (e) => ((real.rir = Datos.num(e.target.value)), actualizar()) }),
+            ];
+        fila.append(el('span.n', { 'aria-hidden': 'true' }, i + 1), el('span.obj', el('small', 'Objetivo'), textoSerie(it, obj)), ...campos);
+        const c = Datos.cumplimientoSerie(obj, real);
+        fila.classList.toggle('hecha', c >= 1);
+        fila.classList.toggle('parcial', c > 0 && c < 1);
+        return fila;
+      });
+
+      const botonCompletar = el(
+        'button.btn.btn-grande.btn-completar',
+        {
+          type: 'button',
+          onclick: async () => {
+            if (r.completo) {
+              r.completo = false;
+            } else {
+              const vacias = it.series.filter((obj, i) => !Datos.cumplimientoSerie(obj, r.series[i])).length;
+              if (vacias && !(await confirmar('Completar ejercicio', `Hay ${vacias} ${vacias === 1 ? 'serie' : 'series'} sin rellenar. ¿Dar el ejercicio por completado igualmente?`, 'Completar'))) return;
+              r.completo = true;
+            }
+            pintarBoton();
+            marcarEstado();
+            guardar();
+            if (r.completo) {
+              det.open = false;
+              // Abre el siguiente ejercicio sin completar
+              const sig = tarjetas.find((t) => !t.classList.contains('completo') && t !== det);
+              if (sig) {
+                sig.open = true;
+                sig.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              } else det.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          },
+        }
       );
+      const pintarBoton = () => {
+        botonCompletar.textContent = r.completo ? '↺ Marcar como no completado' : '✓ Ejercicio completado';
+        botonCompletar.classList.toggle('btn-primario', !r.completo);
+      };
+      pintarBoton();
+
+      det.append(
+        el(
+          'summary.ej-resumen',
+          el('span.ej-num', idx + 1),
+          el('span.ej-titulo', el('b', def.nombre), el('small', textoObjetivo(it))),
+          estado,
+          el('span.ej-flecha', { 'aria-hidden': 'true' })
+        ),
+        el(
+          'div.ej-cuerpo',
+          Figuras.ilustracion(def),
+          it.descanso && el('p.meta', 'Descanso: ' + it.descanso),
+          it.nota && el('div.nota.nota-info', el('b', 'Indicación: '), it.nota),
+          el('details.como', el('summary', 'Cómo se hace'), fichaEjercicio(def)),
+          el('div.series-atleta', filas),
+          el('label.campo', el('span', 'Comentario (opcional)'), el('input', { value: r.nota || '', placeholder: km ? 'Ritmo medio, sensaciones…' : 'Molestias, sensaciones…', oninput: (e) => ((r.nota = e.target.value), guardar()) })),
+          botonCompletar
+        )
+      );
+      marcarEstado();
+      tarjetas.push(det);
+      return det;
     };
 
     const rpe = el(
@@ -2553,8 +2618,8 @@
       {
         type: 'button',
         onclick: async () => {
-          const cs = Datos.cumplimientoSesion(s, reg);
-          if (cs.hechas < cs.series && !(await confirmar('Terminar sesión', `Has registrado ${cs.hechas} de ${cs.series} series. ¿Terminar de todas formas?`, 'Terminar'))) return;
+          const pendientes = s.items.filter((it) => !(reg.items[it.uid] && reg.items[it.uid].completo)).length;
+          if (pendientes && !(await confirmar('Terminar sesión', `Te ${pendientes === 1 ? 'queda 1 ejercicio' : `quedan ${pendientes} ejercicios`} sin completar. ¿Terminar de todas formas?`, 'Terminar'))) return;
           reg.completada = reg.completada || new Date().toISOString();
           const ok = await guardar(true);
           aviso(ok ? '¡Sesión terminada! Tu entrenador ya puede verla.' : 'Sesión terminada. Se enviará cuando tengas conexión.', ok ? 'ok' : 'alerta', 4500);
@@ -2564,13 +2629,28 @@
       reg.completada ? 'Guardar cambios' : 'Terminar sesión'
     );
 
+    const lista = el('div.lista-ejercicios', s.items.map(tarjetaItem));
+    // Al entrar, se abre el primer ejercicio sin completar
+    const primero = tarjetas.find((t) => !t.classList.contains('completo'));
+    if (primero && reg.readiness != null) primero.open = true;
+
     app.replaceChildren(
       el('a.volver', { href: volver }, '← Volver'),
       el('div.cabecera', el('div', el('h1', s.titulo || 'Sesión'), el('span.ayuda-blanca', fechaBonita(s.fecha)))),
+      el(
+        'section.tarjeta.tarjeta-readiness',
+        el('h2', '¿Cómo llegas a la sesión?'),
+        el('p.meta', 'De 0 a 5: cómo de preparado y motivado te sientes hoy.'),
+        selectorReadiness(reg.readiness ?? null, (v) => {
+          reg.readiness = v;
+          guardar();
+          if (v != null && primero && !tarjetas.some((t) => t.open)) primero.open = true;
+        })
+      ),
       s.notas && el('div.tarjeta.indicaciones', el('b', 'Indicaciones del entrenador'), el('p', s.notas)),
       el('div.tarjeta.resumen.pegajoso', resumen, estadoGuardado),
-      el('p.ayuda-blanca', 'Escribe lo que has hecho en cada serie. Si la has hecho tal cual estaba, pulsa ✓.'),
-      ...s.items.map(tarjetaItem),
+      el('p.ayuda-blanca', 'Despliega cada ejercicio, apunta repeticiones, kilos y RIR de cada serie y márcalo como completado.'),
+      lista,
       el(
         'div.tarjeta',
         el('h2', 'Al terminar'),

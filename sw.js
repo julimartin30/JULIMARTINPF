@@ -1,5 +1,5 @@
 /* Permite abrir la app sin cobertura (tras haberla abierto una vez con conexión). */
-const CACHE = 'trackme-v1';
+const CACHE = 'trackme-v2';
 const BASE = [
   './',
   'index.html',
