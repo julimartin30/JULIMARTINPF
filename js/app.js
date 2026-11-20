@@ -171,7 +171,7 @@
 
   /* ================= Acceso ================= */
   async function pantallaAcceso() {
-    document.title = 'Entreno';
+    document.title = 'TRACKME Fitness';
     pintarBarra();
     cargando();
     const hayEntrenador = await Datos.existeEntrenador().catch(() => true);
@@ -195,7 +195,7 @@
               $$('button', roles).forEach((b) => b.setAttribute('aria-checked', String(b === e.currentTarget)));
             },
           },
-          r === 'atleta' ? '🏃 Atleta' : '📋 Entrenador'
+          r === 'atleta' ? 'Atleta' : 'Entrenador'
         )
       )
     );
@@ -232,7 +232,16 @@
     app.replaceChildren(
       el(
         'div.acceso',
-        el('div.cabecera-acceso', el('img', { src: 'assets/icono.svg', alt: '', width: 64, height: 64 }), el('h1', 'Entreno'), el('p', 'Tu planificación, ejercicio a ejercicio.')),
+        el('h1.solo-lector', 'TRACKME Fitness'),
+        el(
+          'div.logo-marca',
+          { role: 'img', 'aria-label': 'TRACKME Fitness by Julimartin' },
+          el('span.palabra.palabra-1', { 'aria-hidden': 'true' }, 'FITNESS'),
+          el('img.pista-grande', { src: 'assets/pista.svg', alt: '', width: 400, height: 140 }),
+          el('span.palabra.palabra-2', { 'aria-hidden': 'true' }, 'TRACKME'),
+          el('span.firma', { 'aria-hidden': 'true' }, 'by Julimartin')
+        ),
+        el('p.lema', 'Tu planificación, ejercicio a ejercicio.'),
         el('div.tarjeta', form),
         !hayEntrenador &&
           el(
@@ -1215,7 +1224,7 @@
         cambio: pesos.length > 1 ? textoPct(pct(pesos[0].y, pesos[pesos.length - 1].y)) : '',
         nota: pesos.length > 1 ? `desde el ${Graficas.corta(pesos[0].x)}` : pesos.length ? Graficas.larga(pesos[0].x) : 'Sin mediciones',
         tieneDatos: pesos.length > 0,
-        mini: (c) => Graficas.lineas(c, { puntos: pesos, color: Graficas.CATEGORICA[0], compacto: true }),
+        mini: (c) => Graficas.lineas(c, { puntos: pesos, color: Graficas.MARCA.rojo, compacto: true }),
       },
       volumen: {
         titulo: 'Volumen',
@@ -1239,7 +1248,7 @@
         cambio: pliegues.length > 1 ? textoPct(pct(pliegues[0].y, pliegues[pliegues.length - 1].y)) : '',
         nota: pliegues.length > 1 ? `desde el ${Graficas.corta(pliegues[0].x)}` : pliegues.length ? Graficas.larga(pliegues[0].x) : 'Sin mediciones',
         tieneDatos: pliegues.length > 0,
-        mini: (c) => Graficas.lineas(c, { puntos: pliegues, color: Graficas.CATEGORICA[1], compacto: true }),
+        mini: (c) => Graficas.lineas(c, { puntos: pliegues, color: Graficas.MARCA.negro, compacto: true }),
       },
     };
 
@@ -1355,8 +1364,8 @@
       abierta === 'peso' ? tablaMedidas('peso', 'kg') : '',
       abierta === 'pliegues' ? tablaMedidas('pliegues', 'mm') : ''
     );
-    if (abierta === 'peso' && pesos.length) Graficas.lineas(g, { puntos: pesos, unidad: 'kg', decimales: 1, color: Graficas.CATEGORICA[0] });
-    if (abierta === 'pliegues' && pliegues.length) Graficas.lineas(g, { puntos: pliegues, unidad: 'mm', decimales: 1, color: Graficas.CATEGORICA[1] });
+    if (abierta === 'peso' && pesos.length) Graficas.lineas(g, { puntos: pesos, unidad: 'kg', decimales: 1, color: Graficas.MARCA.rojo });
+    if (abierta === 'pliegues' && pliegues.length) Graficas.lineas(g, { puntos: pliegues, unidad: 'mm', decimales: 1, color: Graficas.MARCA.negro });
     if (abierta === 'volumen' && seriesGrupo.length) Graficas.barras(g, { categorias: etiquetas, detalle: detalleSem, series: seriesGrupo, unidad: metrica === 'kg' ? 'kg' : 'series' });
     if (abierta === 'km' && seriesKm.length) Graficas.barras(g, { categorias: etiquetas, detalle: detalleSem, series: seriesKm, unidad: 'km', decimales: 1 });
   }
@@ -1778,7 +1787,7 @@
         ),
         registrados.length
           ? [
-              el('div.leyenda', el('span', el('i', { style: `background:${Graficas.CATEGORICA[0]}` }), 'Consumido'), el('span', el('i.leyenda-linea'), 'Pauta')),
+              el('div.leyenda', el('span', el('i', { style: `background:${Graficas.MARCA.rojo}` }), 'Consumido'), el('span', el('i.leyenda-linea'), 'Pauta')),
               g,
               medias.some((m) => m[1] != null) &&
                 el(
@@ -1807,7 +1816,7 @@
       Graficas.barras(g, {
         categorias: dias.map((f) => Graficas.corta(f)),
         detalle: dias.map((f) => fechaBonita(f)),
-        series: [{ nombre: 'Consumido', color: Graficas.CATEGORICA[0], valores: kcalDia.map((v) => v || 0) }],
+        series: [{ nombre: 'Consumido', color: Graficas.MARCA.rojo, valores: kcalDia.map((v) => v || 0) }],
         referencia: refDia,
         nombreReferencia: 'Pauta',
         unidad: 'kcal',
@@ -1903,7 +1912,7 @@
         el('p.meta', reg.length ? `Media: ${fmt0(media)} pasos · ${reg.length} de ${n} días registrados` + (conRef ? ` · pauta cumplida ${cumplidos} de ${conRef} días` : '') : `Sin registros en los últimos ${n} días.`),
         reg.length
           ? [
-              el('div.leyenda', el('span', el('i', { style: `background:${Graficas.CATEGORICA[2]}` }), 'Pasos'), el('span', el('i.leyenda-linea'), 'Pauta')),
+              el('div.leyenda', el('span', el('i', { style: `background:${Graficas.MARCA.rojo}` }), 'Pasos'), el('span', el('i.leyenda-linea'), 'Pauta')),
               g,
               Graficas.tabla(['Día', 'Pasos', 'Pauta'], dias.map((f, i) => [fechaCorta(f), pasos[i] == null ? '—' : fmt0(pasos[i]), ref[i] == null ? '—' : fmt0(ref[i])]).reverse()),
             ]
@@ -1921,7 +1930,7 @@
       Graficas.barras(g, {
         categorias: dias.map((f) => Graficas.corta(f)),
         detalle: dias.map((f) => fechaBonita(f)),
-        series: [{ nombre: 'Pasos', color: Graficas.CATEGORICA[2], valores: pasos.map((v) => v || 0) }],
+        series: [{ nombre: 'Pasos', color: Graficas.MARCA.rojo, valores: pasos.map((v) => v || 0) }],
         referencia: ref,
         nombreReferencia: 'Pauta',
         unidad: 'pasos',
@@ -2223,11 +2232,15 @@
     const pas = Datos.objetivoEn(obj.pasos, h);
     const reg = (d.diario || {})[h] || {};
     if (!deHoy.length && !sinTerminar.length && !nut && !pas) return '';
+    const ICONOS = {
+      comida: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="6"/><path d="M3 4v6M5 4v6M3 10h2M4 10v10M21 4c-1.5 0-2 2-2 5h2v11"/></svg>',
+      pasos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3c-1.7 0-2.5 2-2.5 4.5S5.5 13 7 13s2.5-2 2.5-5S8.7 3 7 3zM5 15.5h4l-.3 2.5a2 2 0 0 1-3.4 0z"/><path d="M17 8c1.7 0 2.5 2 2.5 4.5S18.5 18 17 18s-2.5-2-2.5-5S15.3 8 17 8zM15 20.5h4"/></svg>',
+    };
     const fila = (icono, titulo, contenido, href, extra) =>
       el(
         'a.hoy-fila',
         { href },
-        el('span.hoy-icono', { 'aria-hidden': 'true' }, icono),
+        el('span.hoy-icono', { 'aria-hidden': 'true', html: ICONOS[icono] }),
         el('span.hoy-texto', el('small', titulo), el('b', contenido), extra || ''),
         el('span.hoy-flecha', { 'aria-hidden': 'true' }, '›')
       );
@@ -2242,7 +2255,7 @@
       deHoy.length > 0 ? el('div', el('small.hoy-etq', 'Entrenamiento'), el('div.fila-botones', deHoy.map(boton))) : el('p.meta', 'Hoy no tienes entrenamiento. ¡Descansa!'),
       nut &&
         fila(
-          '🍽',
+          'comida',
           'Alimentación',
           `${fmt0(nut.kcal)} kcal` + (macros.length ? ` · ${macros.join(' · ')}` : ''),
           '#/alimentacion',
@@ -2250,7 +2263,7 @@
         ),
       pas &&
         fila(
-          '👟',
+          'pasos',
           'Pasos',
           `${fmt0(pas.pasos)} pasos`,
           '#/pasos',

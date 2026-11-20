@@ -8,10 +8,12 @@
 (function (global) {
   'use strict';
   const NS = 'http://www.w3.org/2000/svg';
-  const T = { tinta: '#1d2433', suave: '#556074', rejilla: '#e6e9ef', eje: '#c9ced8', superficie: '#ffffff' };
+  const T = { tinta: '#0b0b0b', suave: '#57544e', rejilla: '#ebe9e4', eje: '#cfccc4', superficie: '#ffffff' };
 
   /** Paleta categórica (orden fijo, validada) y escala ordinal azul para zonas de intensidad. */
   const CATEGORICA = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6'];
+  /** Colores de marca para gráficas de una sola serie. */
+  const MARCA = { rojo: '#c90100', negro: '#0b0b0b' };
   const ORDINAL_AZUL = ['#86b6ef', '#5598e7', '#2a78d6', '#1c5cab', '#104281'];
 
   function n(tag, attrs, padre) {
@@ -281,5 +283,5 @@
     return `${+dd} ${MESES[+mm - 1]} ${y}`;
   };
 
-  global.Graficas = { lineas, barras, leyenda, tabla, CATEGORICA, ORDINAL_AZUL, corta, larga, fmt };
+  global.Graficas = { MARCA, lineas, barras, leyenda, tabla, CATEGORICA, ORDINAL_AZUL, corta, larga, fmt };
 })(window);

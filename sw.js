@@ -1,5 +1,5 @@
 /* Permite abrir la app sin cobertura (tras haberla abierto una vez con conexión). */
-const CACHE = 'entreno-v11';
+const CACHE = 'trackme-v1';
 const BASE = [
   './',
   'index.html',
@@ -13,6 +13,8 @@ const BASE = [
   'js/datos.js',
   'js/app.js',
   'assets/icono.svg',
+  'assets/pista.svg',
+  'assets/fuentes/archivo-latin.woff2',
   'manifest.webmanifest',
 ];
 

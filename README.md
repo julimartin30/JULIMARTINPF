@@ -1,4 +1,6 @@
-# Entreno · Planificación deportiva
+# TRACKME Fitness · by Julimartin
+
+App de planificación deportiva.
 
 App web (instalable en el móvil) para que un entrenador planifique las sesiones de sus atletas y vea cuánto han cumplido.
 
@@ -79,6 +81,7 @@ js/rueda.js           Rueda giratoria para elegir los pasos
 js/cripto.js          Cifrado
 js/github.js          Lectura y escritura en el repositorio (API de GitHub)
 js/util.js            Utilidades de interfaz
+assets/               Logotipo (pista), iconos y tipografía Archivo (licencia SIL OFL, en assets/fuentes/OFL.txt)
 css/estilos.css       Estilos
 data/                 Datos cifrados (los crea la app)
 sw.js, manifest.webmanifest   Uso sin conexión e instalación en el móvil

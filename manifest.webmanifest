@@ -1,12 +1,14 @@
 {
-  "name": "Entreno · Planificación deportiva",
-  "short_name": "Entreno",
+  "name": "TRACKME Fitness by Julimartin",
+  "short_name": "TRACKME",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#1d2433",
-  "theme_color": "#1d2433",
+  "background_color": "#e9e8e4",
+  "theme_color": "#e9e8e4",
   "lang": "es",
   "icons": [
-    { "src": "assets/icono.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    { "src": "assets/icono.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "assets/icono-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "assets/icono-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }

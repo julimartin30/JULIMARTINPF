@@ -91,7 +91,7 @@
   }
 
   /* ---------- Dibujo ---------- */
-  const COLOR = { cerca: '#1d2433', lejos: '#9aa3b5', piel: '#1d2433', disco: '#d6452f', barra: '#4b5363', mueble: '#c9ced8', mueble2: '#a9b0bd' };
+  const COLOR = { cerca: '#111111', lejos: '#a29e96', piel: '#111111', disco: '#c90100', barra: '#3d3a36', mueble: '#cfccc4', mueble2: '#aeaaa1' };
 
   function nodo(tag, attrs, padre) {
     const n = document.createElementNS(NS, tag);
@@ -106,7 +106,7 @@
     if (acc.tipo === 'barra') {
       const [x, y] = sitio(acc.en);
       const r = acc.r || 13;
-      nodo('circle', { cx: x, cy: y, r, fill: COLOR.disco, stroke: '#a3311f', 'stroke-width': 2 }, g);
+      nodo('circle', { cx: x, cy: y, r, fill: COLOR.disco, stroke: '#8a0100', 'stroke-width': 2 }, g);
       nodo('circle', { cx: x, cy: y, r: r * 0.45, fill: 'none', stroke: '#fff', 'stroke-opacity': 0.5, 'stroke-width': 1.5 }, g);
       nodo('circle', { cx: x, cy: y, r: 2.6, fill: COLOR.barra }, g);
     } else if (acc.tipo === 'mancuerna') {
@@ -114,8 +114,8 @@
         const [x, y] = sitio(s);
         const lejos = s === 'mano2';
         nodo('rect', { x: x - 8, y: y - 2, width: 16, height: 4, rx: 1.5, fill: lejos ? COLOR.lejos : COLOR.barra }, g);
-        nodo('rect', { x: x - 10, y: y - 6, width: 5, height: 12, rx: 1.5, fill: lejos ? '#e9a397' : COLOR.disco }, g);
-        nodo('rect', { x: x + 5, y: y - 6, width: 5, height: 12, rx: 1.5, fill: lejos ? '#e9a397' : COLOR.disco }, g);
+        nodo('rect', { x: x - 10, y: y - 6, width: 5, height: 12, rx: 1.5, fill: lejos ? '#e8a59f' : COLOR.disco }, g);
+        nodo('rect', { x: x + 5, y: y - 6, width: 5, height: 12, rx: 1.5, fill: lejos ? '#e8a59f' : COLOR.disco }, g);
       }
     } else if (acc.tipo === 'pesa_rusa') {
       const [x, y] = sitio(acc.en);
@@ -142,7 +142,7 @@
   function pintar(svg, def, postura) {
     const esq = esqueleto(postura);
     svg.textContent = '';
-    nodo('line', { x1: 4, y1: SUELO + 1.5, x2: 196, y2: SUELO + 1.5, stroke: '#c9ced8', 'stroke-width': 3, 'stroke-linecap': 'round' }, svg);
+    nodo('line', { x1: 4, y1: SUELO + 1.5, x2: 196, y2: SUELO + 1.5, stroke: '#cfccc4', 'stroke-width': 3, 'stroke-linecap': 'round' }, svg);
     const g = nodo('g', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', fill: 'none' }, svg);
     const trazo = (pts, color, ancho) => nodo('path', { d: linea(pts), stroke: color, 'stroke-width': ancho }, g);
 
@@ -161,7 +161,7 @@
     trazo([esq.hombro, esq.b1.codo, esq.b1.mano], COLOR.cerca, 7);
     nodo('circle', { cx: esq.b1.mano[0], cy: esq.b1.mano[1], r: 3.6, fill: COLOR.cerca }, g);
     (def.flechas || []).forEach((f) => {
-      nodo('path', { d: f, stroke: '#2a7de1', 'stroke-width': 2.2, 'stroke-dasharray': '4 3', fill: 'none', 'marker-end': 'url(#flecha)' }, g);
+      nodo('path', { d: f, stroke: '#c90100', 'stroke-width': 2.2, 'stroke-dasharray': '4 3', fill: 'none', 'marker-end': 'url(#flecha)' }, g);
     });
   }
 
@@ -610,7 +610,7 @@
     }
     if (!def.poses) {
       fig.classList.add('sin-dibujo');
-      fig.innerHTML = '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="14" r="7" fill="#9aa3b5"/><path d="M32 22v20M32 42l-9 16M32 42l9 16M18 30l14-4 14 4" stroke="#9aa3b5" stroke-width="5" stroke-linecap="round" fill="none"/></svg>';
+      fig.innerHTML = '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="14" r="7" fill="#a29e96"/><path d="M32 22v20M32 42l-9 16M32 42l9 16M18 30l14-4 14 4" stroke="#a29e96" stroke-width="5" stroke-linecap="round" fill="none"/></svg>';
       return fig;
     }
     const svg = document.createElementNS(NS, 'svg');
