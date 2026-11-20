@@ -355,7 +355,8 @@
           if (sub === 'sesion' && x && y === 'editar') return await vistaEditor(id, 'instancia', x);
           if (sub === 'sesion' && x) return await vistaRevision(id, x);
           if (sub === 'disenar') return await vistaEditor(id, 'plantilla', x || 'nueva');
-          if (['perfil', 'plan', 'evolucion', 'sesiones', 'alimentacion', 'pasos'].includes(sub)) return await vistaFicha(id, sub, x);
+          if (sub === 'evolucion') return ir(`#/atleta/${id}/perfil` + (x ? '/' + x : ''));
+          if (['perfil', 'plan', 'sesiones', 'alimentacion', 'pasos'].includes(sub)) return await vistaFicha(id, sub, x);
           return ir(`#/atleta/${id}/perfil`);
         }
         if (vista === 'ejercicios') return vistaEjercicios();
@@ -365,7 +366,8 @@
       const [vista, x] = partes;
       if (vista === 's' && x) return vistaSesionAtleta(x);
       if (vista === 'microciclo') return await vistaMicrociclo(x);
-      if (vista === 'evolucion') return await vistaEvolucionAtleta(x);
+      if (vista === 'evolucion') return ir('#/perfil' + (x ? '/' + x : ''));
+      if (vista === 'perfil') return await vistaPerfilAtleta(x);
       if (vista === 'alimentacion' || vista === 'pasos') return await vistaDiarioAtleta(vista);
       if (vista === 'cuenta') return vistaCuentaAtleta();
       if (vista === 'calendario') return await vistaCalendarioAtleta(x);
@@ -578,16 +580,22 @@
           [`#/atleta/${id}/plan`, 'Planificación', 'plan'],
           [`#/atleta/${id}/alimentacion`, 'Alimentación', 'alimentacion'],
           [`#/atleta/${id}/pasos`, 'Pasos', 'pasos'],
-          [`#/atleta/${id}/evolucion`, 'Evolución', 'evolucion'],
         ],
         pestana,
         'Ficha de ' + a.nombre
       ),
       contenido
     );
-    if (pestana === 'perfil')
+    const evolucion = {
+      base: `#/atleta/${a.id}/perfil`,
+      textoVolver: '← Perfil',
+      guardar: async (mid, medida) => (S.atletas[a.id] = await Datos.guardarMedida(a.ruta, Cripto.unb64(a.dek), mid, medida)),
+    };
+    if (pestana === 'perfil' && arg) pintarEvolucion(contenido, d, { ...evolucion, detalle: arg });
+    else if (pestana === 'perfil')
       pintarPerfil(contenido, d, {
         esAtleta: false,
+        evolucion,
         guardar: async (cambios) => (S.atletas[a.id] = await Datos.guardarPerfil(a.ruta, Cripto.unb64(a.dek), cambios)),
       });
     else if (pestana === 'sesiones') pintarSesionesDisenadas(contenido, a, d);
@@ -598,15 +606,7 @@
         guardarObjetivo: async (tipo, desde, pauta) => (S.atletas[a.id] = await Datos.guardarObjetivo(a, tipo, desde, pauta)),
       };
       (pestana === 'pasos' ? pintarPasos : pintarAlimentacion)(contenido, d, op);
-    } else
-      pintarEvolucion(contenido, d, {
-        base: `#/atleta/${a.id}/evolucion`,
-        detalle: arg,
-        guardar: async (mid, medida) => {
-          S.atletas[a.id] = await Datos.guardarMedida(a.ruta, Cripto.unb64(a.dek), mid, medida);
-          return S.atletas[a.id];
-        },
-      });
+    }
   }
 
   /* --- Pestaña Sesiones: las sesiones diseñadas (sin fecha) --- */
@@ -1250,7 +1250,7 @@
         const nuevos = await guardar(r.id, r.medida);
         if (nuevos) Object.assign(datos, nuevos);
         aviso(r.medida ? 'Medición guardada' : 'Medición eliminada');
-        repintar();
+        (op.trasCambio || repintar)();
       } catch (e) {
         aviso(errorTexto(e), 'error');
       }
@@ -1345,7 +1345,7 @@
       pliegues: 'Suma de 6 pliegues cutáneos (mm)',
     };
     contenido.replaceChildren(
-      el('a.volver', { href: base }, '← Evolución'),
+      el('a.volver', { href: base }, op.textoVolver || '← Evolución'),
       el('div.cabecera', rango, (abierta === 'peso' || abierta === 'pliegues') && botonMedida),
       el(
         'section.tarjeta.tarjeta-grafica',
@@ -1387,6 +1387,7 @@
     const parrafos = (t) => String(t).split('\n').filter((l) => l.trim()).map((l) => el('p', l));
 
     if (!S.editandoPerfil) {
+      const evo = el('div.evolucion-perfil');
       contenido.replaceChildren(
         el(
           'section.tarjeta.cabecera-perfil',
@@ -1401,6 +1402,11 @@
               dato('Peso', peso ? `${Graficas.fmt(peso, 1)} kg` : null),
               imc && dato('IMC', Graficas.fmt(imc, 1)),
               edad != null && dato('Edad', `${edad} años`)
+            ),
+            el(
+              'div.fila-botones.botones-perfil',
+              el('button.btn.btn-primario.btn-peq', { type: 'button', onclick: () => ((S.editandoPerfil = true), repintar()) }, 'Editar perfil'),
+              op.esAtleta && el('a.btn.btn-peq', { href: '#/cuenta' }, 'Mi cuenta')
             )
           )
         ),
@@ -1413,13 +1419,10 @@
         ),
         el('h2.titulo-seccion', 'Consideraciones'),
         el('section.tarjeta.consideraciones', p.consideraciones ? parrafos(p.consideraciones) : el('p.meta', 'Lesiones, alergias, horarios, material disponible… Aún no hay nada apuntado.')),
-        el(
-          'div.fila-botones',
-          el('button.btn.btn-primario', { type: 'button', onclick: () => ((S.editandoPerfil = true), repintar()) }, 'Editar perfil'),
-          op.esAtleta && el('a.btn.btn-claro', { href: '#/cuenta' }, 'Mi cuenta')
-        ),
-        p.actualizado && el('p.ayuda-blanca', 'Actualizado el ' + new Date(p.actualizado).toLocaleDateString('es-ES'))
+        p.actualizado && el('p.ayuda-blanca', 'Perfil actualizado el ' + new Date(p.actualizado).toLocaleDateString('es-ES')),
+        ...(op.evolucion ? [el('h2.titulo-seccion', 'Evolución'), evo] : [])
       );
+      if (op.evolucion) pintarEvolucion(evo, datos, { ...op.evolucion, detalle: null, trasCambio: repintar });
       return;
     }
 
@@ -1500,13 +1503,24 @@
     );
   }
 
-  async function vistaPerfilAtleta() {
+  async function vistaPerfilAtleta(detalle) {
     cargando();
     const d = await refrescarAtleta();
     const contenido = el('div');
     app.replaceChildren(pestanasAtleta('perfil'), avisoModo() || '', el('h1.titulo-blanco', 'Mi perfil'), contenido);
+    const evolucion = {
+      base: '#/perfil',
+      textoVolver: '← Mi perfil',
+      guardar: async (mid, medida) => {
+        S.sesion.datos = await Datos.guardarMedida(S.sesion.ruta, S.sesion.dek, mid, medida);
+        await Datos.aplicarPendientes(S.sesion);
+        return S.sesion.datos;
+      },
+    };
+    if (detalle) return pintarEvolucion(contenido, d, { ...evolucion, detalle });
     pintarPerfil(contenido, d, {
       esAtleta: true,
+      evolucion,
       guardar: async (cambios) => {
         S.sesion.datos = await Datos.guardarPerfil(S.sesion.ruta, S.sesion.dek, cambios);
         await Datos.aplicarPendientes(S.sesion);
@@ -2190,7 +2204,6 @@
         ['#/microciclo', 'Microciclo', 'microciclo'],
         ['#/alimentacion', 'Alimentación', 'alimentacion'],
         ['#/pasos', 'Pasos', 'pasos'],
-        ['#/evolucion', 'Evolución', 'evolucion'],
       ],
       activa
     );
@@ -2346,23 +2359,6 @@
     (vista === 'pasos' ? pintarPasos : pintarAlimentacion)(contenido, d, {
       puedePautar: false,
       guardarDiario: (fecha, valores) => Datos.guardarDiario(S.sesion, fecha, valores),
-    });
-  }
-
-  async function vistaEvolucionAtleta(detalle) {
-    cargando();
-    const d = await refrescarAtleta();
-    const contenido = el('div');
-    app.replaceChildren(pestanasAtleta('evolucion'), avisoModo() || '', el('h1.titulo-blanco', 'Mi evolución'), contenido);
-    pintarEvolucion(contenido, d, {
-      base: '#/evolucion',
-      detalle,
-      guardar: async (mid, medida) => {
-        const nuevos = await Datos.guardarMedida(S.sesion.ruta, S.sesion.dek, mid, medida);
-        S.sesion.datos = nuevos;
-        await Datos.aplicarPendientes(S.sesion);
-        return S.sesion.datos;
-      },
     });
   }
 

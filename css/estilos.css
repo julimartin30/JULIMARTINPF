@@ -492,3 +492,5 @@ img.avatar { object-fit: cover; }
   .cabecera-perfil-texto { justify-items: center; }
   .datos-perfil { justify-content: center; }
 }
+.botones-perfil { margin-top: 8px; }
+@media (max-width: 760px) { .botones-perfil { justify-content: center; } }
