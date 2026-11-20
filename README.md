@@ -2,7 +2,8 @@
 
 App web (instalable en el móvil) para que un entrenador planifique las sesiones de sus atletas y vea cuánto han cumplido.
 
-- **Entrenador:** ve una tarjeta por atleta. Al pulsarla se abre su ficha, con tres pestañas:
+- **Entrenador:** ve una tarjeta por atleta (con su foto). Al pulsarla se abre su ficha:
+  - **Perfil:** el mismo perfil que ve el atleta, también editable.
   - **Sesiones:** diseña las sesiones de ese atleta (título, ejercicios, series, repeticiones, kilos, kilómetros y zona de intensidad, descansos e indicaciones). Se pueden duplicar o copiar a otro atleta.
   - **Planificación:** calendario mensual. Pulsando un día se añaden una o varias de las sesiones diseñadas (y se pueden repetir varias semanas). Cada sesión aparece en el día con un color según lo que ha cumplido el atleta; al pulsarla se ve serie a serie lo pautado frente a lo realizado.
   - **Alimentación:** pautas las kcal diarias con su reparto de macros (proteínas, hidratos y grasas en gramos; la app calcula el % de las kcal y los g/kg con su último peso) e indicaciones. Ves lo que registra el atleta día a día frente a la pauta.
@@ -10,8 +11,9 @@ App web (instalable en el móvil) para que un entrenador planifique las sesiones
   - **Evolución:** las mismas gráficas que ve el atleta.
 
 Las pautas de alimentación y pasos se guardan con la fecha desde la que rigen, así queda el historial de cambios.
-- **Atleta:** cinco pestañas:
-  - **Calendario** (se abre al entrar): vista mensual con toda su preparación. Arriba, el resumen de hoy: la sesión que le toca, la pauta de alimentación (kcal y macros) y la de pasos, con lo que lleva registrado, más las sesiones que tenga sin registrar de la semana. Pulsando una sesión ve los ejercicios y anota lo que ha hecho (si una serie la ha hecho tal cual, basta con pulsar ✓).
+- **Atleta:** seis pestañas:
+  - **Mi perfil** (se abre al entrar): foto, altura, peso (de la última medición), IMC, edad y deporte; objetivos a corto, medio y largo plazo; y consideraciones (lesiones, alergias, horarios, material…). Lo pueden editar el atleta y el entrenador.
+  - **Calendario:** vista mensual con toda su preparación. Arriba, el resumen de hoy: la sesión que le toca, la pauta de alimentación (kcal y macros) y la de pasos, con lo que lleva registrado, más las sesiones que tenga sin registrar de la semana. Pulsando una sesión ve los ejercicios y anota lo que ha hecho (si una serie la ha hecho tal cual, basta con pulsar ✓).
   - **Microciclo:** la semana en horizontal, un día por tarjeta, con el título de cada sesión, la lista de sus ejercicios y su estado. En el móvil se desliza de lado y empieza en el día de hoy.
   - **Alimentación:** su pauta de kcal y macros, y un formulario para apuntar lo que ha comido cada día (kcal y, si quiere, macros), con la gráfica de los últimos días frente a la pauta.
   - **Pasos:** su pauta de pasos y una rueda para apuntar los pasos de cada día (girar a la derecha suma 100 por muesca, a la izquierda resta; una vuelta son 6.000; también hay botones de ±100 y ±1.000). Parte de los últimos pasos registrados o de la pauta. Con la gráfica frente a la pauta.

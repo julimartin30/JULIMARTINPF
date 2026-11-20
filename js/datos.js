@@ -532,7 +532,20 @@
     return enviarPendientes(sesion);
   }
 
+  /** Perfil del atleta (altura, foto, objetivos, consideraciones). Lo pueden editar el atleta y el entrenador. */
+  function guardarPerfil(ruta, dekRaw, cambios) {
+    return actualizarCifrado(
+      ruta,
+      dekRaw,
+      (d) => {
+        d.perfil = { ...(d.perfil || {}), ...cambios, actualizado: new Date().toISOString() };
+      },
+      'Perfil del atleta'
+    );
+  }
+
   global.Datos = {
+    guardarPerfil,
     objetivoEn,
     kcalMacros,
     guardarObjetivo,

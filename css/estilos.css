@@ -463,3 +463,32 @@ pre.credenciales { white-space: pre-wrap; background: var(--gris); border-radius
 .hoy-progreso { font-size: 0.84rem; color: var(--tinta-suave); }
 .hoy-texto .medidor { margin: 4px 0 0; height: 7px; }
 .hoy-flecha { font-size: 1.5rem; color: var(--tinta-suave); }
+
+/* Perfil del atleta */
+.cabecera-perfil { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+.cabecera-perfil h2 { margin: 0; font-size: 1.4rem; }
+.cabecera-perfil-texto { flex: 1; min-width: 200px; display: grid; gap: 4px; }
+.foto-perfil { width: 112px; height: 112px; border-radius: 50%; object-fit: cover; flex: none; box-shadow: 0 0 0 4px #fff, 0 0 0 6px var(--acento); }
+.foto-perfil.sin-foto { display: grid; place-items: center; background: var(--tinta); color: #fff; font-size: 2.2rem; font-weight: 900; }
+.foto-perfil.grande { width: 140px; height: 140px; }
+img.avatar { object-fit: cover; }
+.datos-perfil { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.dato-perfil { display: grid; background: var(--gris); border-radius: 10px; padding: 6px 12px; min-width: 76px; }
+.dato-perfil small { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--tinta-suave); }
+.dato-perfil b { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.objetivos-plazo { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.plazo { margin: 0; border-top: 5px solid; }
+.plazo-corto { border-top-color: #2a78d6; }
+.plazo-medio { border-top-color: #eb6834; }
+.plazo-largo { border-top-color: #1baf7a; }
+.plazo-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.plazo-cab small { color: var(--tinta-suave); font-weight: 600; font-size: 0.8rem; }
+.plazo p:last-child, .consideraciones p:last-child { margin-bottom: 0; }
+.consideraciones { border-left: 5px solid #eda100; }
+.editar-foto { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .objetivos-plazo { grid-template-columns: 1fr; }
+  .cabecera-perfil { justify-content: center; text-align: center; }
+  .cabecera-perfil-texto { justify-items: center; }
+  .datos-perfil { justify-content: center; }
+}

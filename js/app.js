@@ -347,6 +347,7 @@
     pintarBarra();
     const partes = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
     window.scrollTo(0, 0);
+    S.editandoPerfil = false;
     try {
       if (S.sesion.rol === 'entrenador') {
         const [vista, id, sub, x, y] = partes;
@@ -354,8 +355,8 @@
           if (sub === 'sesion' && x && y === 'editar') return await vistaEditor(id, 'instancia', x);
           if (sub === 'sesion' && x) return await vistaRevision(id, x);
           if (sub === 'disenar') return await vistaEditor(id, 'plantilla', x || 'nueva');
-          if (['plan', 'evolucion', 'sesiones', 'alimentacion', 'pasos'].includes(sub)) return await vistaFicha(id, sub, x);
-          return ir(`#/atleta/${id}/sesiones`);
+          if (['perfil', 'plan', 'evolucion', 'sesiones', 'alimentacion', 'pasos'].includes(sub)) return await vistaFicha(id, sub, x);
+          return ir(`#/atleta/${id}/perfil`);
         }
         if (vista === 'ejercicios') return vistaEjercicios();
         if (vista === 'ajustes') return vistaAjustes();
@@ -367,7 +368,8 @@
       if (vista === 'evolucion') return await vistaEvolucionAtleta(x);
       if (vista === 'alimentacion' || vista === 'pasos') return await vistaDiarioAtleta(vista);
       if (vista === 'cuenta') return vistaCuentaAtleta();
-      return await vistaCalendarioAtleta(vista === 'calendario' ? x : null);
+      if (vista === 'calendario') return await vistaCalendarioAtleta(x);
+      return await vistaPerfilAtleta();
     } catch (e) {
       console.error(e);
       app.replaceChildren(el('div.tarjeta', el('h2', 'No se ha podido cargar'), el('p', errorTexto(e)), el('button.btn', { type: 'button', onclick: render }, 'Reintentar')));
@@ -415,14 +417,14 @@
     const tarjetas = atletas.map((a, i) => {
       const d = datos[i];
       const iniciales = a.nombre.split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
-      if (!d) return el('a.tarjeta-atleta', { href: `#/atleta/${a.id}/sesiones` }, el('b', a.nombre), el('span.ayuda', 'No se han podido leer sus datos'));
+      if (!d) return el('a.tarjeta-atleta', { href: `#/atleta/${a.id}/perfil` }, el('b', a.nombre), el('span.ayuda', 'No se han podido leer sus datos'));
       const c = Datos.cumplimientoPeriodo(d);
       const prox = (d.sesiones || []).filter((s) => s.fecha >= h && !(d.registros[s.id] && d.registros[s.id].completada)).sort((x, y) => x.fecha.localeCompare(y.fecha))[0];
       const ult = Object.values(d.registros || {}).map((r) => r.actualizado).filter(Boolean).sort().pop();
       return el(
         'a.tarjeta-atleta',
-        { href: `#/atleta/${a.id}/sesiones` },
-        el('div.atleta-cab', el('span.avatar', { 'aria-hidden': 'true' }, iniciales), el('b', a.nombre), el('span.pct.tono-' + colorPct(c.pct), c.pct == null ? '—' : c.pct + '%')),
+        { href: `#/atleta/${a.id}/perfil` },
+        el('div.atleta-cab', d.perfil && d.perfil.foto ? el('img.avatar', { src: d.perfil.foto, alt: '' }) : el('span.avatar', { 'aria-hidden': 'true' }, iniciales), el('b', a.nombre), el('span.pct.tono-' + colorPct(c.pct), c.pct == null ? '—' : c.pct + '%')),
         barra(c.pct, 'Cumplimiento de ' + a.nombre),
         el('span.ayuda', c.sesiones ? `Cumplimiento últimas 4 semanas (${c.sesiones} sesiones)` : 'Sin sesiones vencidas en las últimas 4 semanas'),
         el('span.meta', prox ? `Próxima: ${fechaBonita(prox.fecha)} · ${prox.titulo || 'Sesión'}` : 'Sin sesiones programadas'),
@@ -475,7 +477,7 @@
       cargando('Creando atleta…');
       const a = await Datos.crearAtleta(S.sesion, { nombre: nombre.value.trim(), usuario: usuario.value, password: pass.value });
       await mostrarCredenciales(a.nombre, a.usuario, pass.value);
-      ir(`#/atleta/${a.id}/sesiones`);
+      ir(`#/atleta/${a.id}/perfil`);
     } catch (e) {
       aviso(errorTexto(e), 'error', 6000);
       render();
@@ -571,6 +573,7 @@
       ),
       pestanas(
         [
+          [`#/atleta/${id}/perfil`, 'Perfil', 'perfil'],
           [`#/atleta/${id}/sesiones`, 'Sesiones', 'sesiones'],
           [`#/atleta/${id}/plan`, 'Planificación', 'plan'],
           [`#/atleta/${id}/alimentacion`, 'Alimentación', 'alimentacion'],
@@ -582,7 +585,12 @@
       ),
       contenido
     );
-    if (pestana === 'sesiones') pintarSesionesDisenadas(contenido, a, d);
+    if (pestana === 'perfil')
+      pintarPerfil(contenido, d, {
+        esAtleta: false,
+        guardar: async (cambios) => (S.atletas[a.id] = await Datos.guardarPerfil(a.ruta, Cripto.unb64(a.dek), cambios)),
+      });
+    else if (pestana === 'sesiones') pintarSesionesDisenadas(contenido, a, d);
     else if (pestana === 'plan') pintarPlanificacion(contenido, a, d, arg);
     else if (pestana === 'alimentacion' || pestana === 'pasos') {
       const op = {
@@ -1353,6 +1361,160 @@
     if (abierta === 'km' && seriesKm.length) Graficas.barras(g, { categorias: etiquetas, detalle: detalleSem, series: seriesKm, unidad: 'km', decimales: 1 });
   }
 
+  /* ================= PERFIL DEL ATLETA (atleta y entrenador) ================= */
+  const PLAZOS = [
+    ['corto', 'Corto plazo', 'p. ej. bajar de 5 min/km en 5 km', 'Próximas semanas'],
+    ['medio', 'Medio plazo', 'p. ej. terminar una media maratón', 'Próximos meses'],
+    ['largo', 'Largo plazo', 'p. ej. competir en el campeonato nacional', 'Este año o más'],
+  ];
+
+  function fotoPerfil(perfil, nombre, clase = '') {
+    if (perfil && perfil.foto) return el('img.foto-perfil' + clase, { src: perfil.foto, alt: 'Foto de ' + nombre });
+    const ini = nombre.split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
+    return el('span.foto-perfil.sin-foto' + clase, { role: 'img', 'aria-label': 'Sin foto' }, ini);
+  }
+
+  function pintarPerfil(contenido, datos, op) {
+    const repintar = () => pintarPerfil(contenido, datos, op);
+    const p = datos.perfil || {};
+    const obj = p.objetivos || {};
+    const nombre = datos.atleta.nombre;
+    const peso = ultimoPeso(datos);
+    const altura = Datos.num(p.altura);
+    const imc = peso && altura ? Math.round((peso / Math.pow(altura / 100, 2)) * 10) / 10 : null;
+    const edad = p.nacimiento ? Math.floor((Date.now() - new Date(p.nacimiento + 'T12:00:00').getTime()) / (365.25 * 864e5)) : null;
+    const dato = (etq, valor) => el('div.dato-perfil', el('small', etq), el('b', valor ?? '—'));
+    const parrafos = (t) => String(t).split('\n').filter((l) => l.trim()).map((l) => el('p', l));
+
+    if (!S.editandoPerfil) {
+      contenido.replaceChildren(
+        el(
+          'section.tarjeta.cabecera-perfil',
+          fotoPerfil(p, nombre),
+          el(
+            'div.cabecera-perfil-texto',
+            el('h2', nombre),
+            p.deporte && el('p.meta', p.deporte),
+            el(
+              'div.datos-perfil',
+              dato('Altura', altura ? `${Graficas.fmt(altura, 0)} cm` : null),
+              dato('Peso', peso ? `${Graficas.fmt(peso, 1)} kg` : null),
+              imc && dato('IMC', Graficas.fmt(imc, 1)),
+              edad != null && dato('Edad', `${edad} años`)
+            )
+          )
+        ),
+        el('h2.titulo-seccion', 'Objetivos'),
+        el(
+          'div.objetivos-plazo',
+          PLAZOS.map(([k, t, , cuando]) =>
+            el('section.tarjeta.plazo.plazo-' + k, el('div.plazo-cab', el('b', t), el('small', cuando)), obj[k] ? parrafos(obj[k]) : el('p.meta', 'Sin definir'))
+          )
+        ),
+        el('h2.titulo-seccion', 'Consideraciones'),
+        el('section.tarjeta.consideraciones', p.consideraciones ? parrafos(p.consideraciones) : el('p.meta', 'Lesiones, alergias, horarios, material disponible… Aún no hay nada apuntado.')),
+        el(
+          'div.fila-botones',
+          el('button.btn.btn-primario', { type: 'button', onclick: () => ((S.editandoPerfil = true), repintar()) }, 'Editar perfil'),
+          op.esAtleta && el('a.btn.btn-claro', { href: '#/cuenta' }, 'Mi cuenta')
+        ),
+        p.actualizado && el('p.ayuda-blanca', 'Actualizado el ' + new Date(p.actualizado).toLocaleDateString('es-ES'))
+      );
+      return;
+    }
+
+    // Edición
+    const x = JSON.parse(JSON.stringify({ ...p, objetivos: { ...obj } }));
+    const vista = el('div.vista-foto');
+    const pintarFoto = () => vista.replaceChildren(fotoPerfil(x, nombre, '.grande'));
+    pintarFoto();
+    const foto = el('input', {
+      type: 'file',
+      accept: 'image/*',
+      onchange: async (ev) => {
+        const f = ev.target.files[0];
+        if (!f) return;
+        try {
+          x.foto = await reducirImagen(f, 360, true);
+          pintarFoto();
+        } catch (err) {
+          aviso(err.message, 'error');
+        }
+      },
+    });
+    const campo = (etq, input) => el('label.campo', el('span', etq), input);
+    const guardar = async (btn) => {
+      btn.disabled = true;
+      btn.textContent = 'Guardando…';
+      try {
+        const nuevos = await op.guardar({
+          foto: x.foto || null,
+          altura: Datos.num(x.altura),
+          nacimiento: x.nacimiento || null,
+          deporte: (x.deporte || '').trim(),
+          objetivos: Object.fromEntries(PLAZOS.map(([k]) => [k, (x.objetivos[k] || '').trim()])),
+          consideraciones: (x.consideraciones || '').trim(),
+        });
+        if (nuevos) Object.assign(datos, nuevos);
+        S.editandoPerfil = false;
+        aviso('Perfil guardado');
+        repintar();
+      } catch (e) {
+        aviso(errorTexto(e), 'error');
+        btn.disabled = false;
+        btn.textContent = 'Guardar';
+      }
+    };
+    contenido.replaceChildren(
+      el(
+        'section.tarjeta',
+        el('h2', 'Foto'),
+        el('div.editar-foto', vista, el('div', campo('Elegir foto', foto), x.foto && el('button.btn.btn-peq', { type: 'button', onclick: (ev) => ((x.foto = null), pintarFoto(), ev.target.remove()) }, 'Quitar foto')))
+      ),
+      el(
+        'section.tarjeta',
+        el('h2', 'Datos'),
+        el(
+          'div.rejilla',
+          campo('Altura (cm)', el('input', { type: 'number', inputmode: 'numeric', min: 50, max: 250, value: x.altura ?? '', oninput: (e) => (x.altura = e.target.value) })),
+          campo('Fecha de nacimiento', el('input', { type: 'date', value: x.nacimiento || '', onchange: (e) => (x.nacimiento = e.target.value) })),
+          campo('Deporte / prueba', el('input', { value: x.deporte || '', placeholder: 'p. ej. Fútbol 5, 800 m…', oninput: (e) => (x.deporte = e.target.value) }))
+        ),
+        el('p.ayuda', 'El peso se toma de la última medición de Evolución.')
+      ),
+      el(
+        'section.tarjeta',
+        el('h2', 'Objetivos'),
+        PLAZOS.map(([k, t, ej, cuando]) => campo(`${t} (${cuando.toLowerCase()})`, el('textarea', { rows: 2, placeholder: ej, oninput: (e) => (x.objetivos[k] = e.target.value) }, x.objetivos[k] || '')))
+      ),
+      el(
+        'section.tarjeta',
+        el('h2', 'Consideraciones'),
+        campo('Lesiones, alergias, medicación, horarios, material disponible…', el('textarea', { rows: 4, oninput: (e) => (x.consideraciones = e.target.value) }, x.consideraciones || ''))
+      ),
+      el(
+        'div.barra-guardar',
+        el('button.btn', { type: 'button', onclick: () => ((S.editandoPerfil = false), repintar()) }, 'Cancelar'),
+        el('button.btn.btn-primario', { type: 'button', onclick: (e) => guardar(e.currentTarget) }, 'Guardar')
+      )
+    );
+  }
+
+  async function vistaPerfilAtleta() {
+    cargando();
+    const d = await refrescarAtleta();
+    const contenido = el('div');
+    app.replaceChildren(pestanasAtleta('perfil'), avisoModo() || '', el('h1.titulo-blanco', 'Mi perfil'), contenido);
+    pintarPerfil(contenido, d, {
+      esAtleta: true,
+      guardar: async (cambios) => {
+        S.sesion.datos = await Datos.guardarPerfil(S.sesion.ruta, S.sesion.dek, cambios);
+        await Datos.aplicarPendientes(S.sesion);
+        return S.sesion.datos;
+      },
+    });
+  }
+
   /* ================= ALIMENTACIÓN Y PASOS (entrenador y atleta) ================= */
   const MACROS = [
     ['prot', 'Proteínas', 4],
@@ -1820,16 +1982,22 @@
     );
   }
 
-  function reducirImagen(fichero) {
+  function reducirImagen(fichero, max = 520, cuadrada = false) {
     return new Promise((ok, mal) => {
       const img = new Image();
       img.onload = () => {
-        const max = 520;
-        const k = Math.min(1, max / Math.max(img.width, img.height));
         const c = document.createElement('canvas');
-        c.width = Math.round(img.width * k);
-        c.height = Math.round(img.height * k);
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        if (cuadrada) {
+          // Recorte centrado
+          const lado = Math.min(img.width, img.height);
+          c.width = c.height = Math.min(max, lado);
+          c.getContext('2d').drawImage(img, (img.width - lado) / 2, (img.height - lado) / 2, lado, lado, 0, 0, c.width, c.height);
+        } else {
+          const k = Math.min(1, max / Math.max(img.width, img.height));
+          c.width = Math.round(img.width * k);
+          c.height = Math.round(img.height * k);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        }
         URL.revokeObjectURL(img.src);
         ok(c.toDataURL('image/jpeg', 0.78));
       };
@@ -2017,7 +2185,8 @@
   const pestanasAtleta = (activa) =>
     pestanas(
       [
-        ['#/', 'Calendario', 'calendario'],
+        ['#/', 'Mi perfil', 'perfil'],
+        ['#/calendario', 'Calendario', 'calendario'],
         ['#/microciclo', 'Microciclo', 'microciclo'],
         ['#/alimentacion', 'Alimentación', 'alimentacion'],
         ['#/pasos', 'Pasos', 'pasos'],
@@ -2090,7 +2259,7 @@
     const c = Datos.cumplimientoPeriodo(d);
     const boton = (s) => {
       const cs = Datos.cumplimientoSesion(s, d.registros[s.id]);
-      return el('a.acceso-sesion', { href: '#/s/' + s.id, onclick: () => (S.volverAtleta = location.hash || '#/') }, el('b', s.titulo || 'Sesión'), chipEstado(cs));
+      return el('a.acceso-sesion', { href: '#/s/' + s.id, onclick: () => (S.volverAtleta = location.hash || '#/calendario') }, el('b', s.titulo || 'Sesión'), chipEstado(cs));
     };
     app.replaceChildren(
       pestanasAtleta('calendario'),
@@ -2105,7 +2274,7 @@
         titulo: 'Tu preparación',
         hrefMes: (m) => '#/calendario/' + m,
         hrefSesion: (s) => '#/s/' + s.id,
-        alPulsarSesion: () => (S.volverAtleta = location.hash || '#/'),
+        alPulsarSesion: () => (S.volverAtleta = location.hash || '#/calendario'),
         alPulsarDia: (fecha) => ir('#/microciclo/' + fecha),
         etiquetaDia: (fecha, n) => `${fechaBonita(fecha)}: ${n ? n + ' sesiones' : 'descanso'}. Ver su semana`,
       }),
@@ -2200,7 +2369,7 @@
   function vistaCuentaAtleta() {
     app.replaceChildren(
       pestanasAtleta(''),
-      el('a.volver', { href: '#/' }, '← Calendario'),
+      el('a.volver', { href: '#/' }, '← Mi perfil'),
       el('h1.titulo-blanco', 'Mi cuenta'),
       el('div.tarjeta', el('p', el('b', 'Usuario: '), S.sesion.datos.atleta.usuario), el('button.btn', { type: 'button', onclick: () => cambiarMiPassword() }, 'Cambiar contraseña'))
     );
@@ -2209,8 +2378,8 @@
   function vistaSesionAtleta(sid) {
     const d = S.sesion.datos;
     const s = (d.sesiones || []).find((x) => x.id === sid);
-    if (!s) return ir('#/');
-    const volver = S.volverAtleta || '#/';
+    if (!s) return ir('#/calendario');
+    const volver = S.volverAtleta || '#/calendario';
     const reg = JSON.parse(JSON.stringify(d.registros[sid] || { items: {}, rpe: null, comentario: '', completada: null }));
     reg.items = reg.items || {};
     const estadoGuardado = el('span.guardado', { role: 'status', 'aria-live': 'polite' });
